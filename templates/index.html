@@ -1,0 +1,1431 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Smart Energy Monitoring</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --bg:#06111d;--surface:rgba(12,28,44,.86);--surface2:rgba(8,21,35,.72);
+      --line:rgba(105,180,230,.26);--line2:rgba(105,180,230,.14);
+      --txt:#eef8ff;--muted:#91a9bc;--soft:#c7d9e7;
+      --cyan:#42d7ff;--blue:#3a8dff;--ok:#32d583;--warn:#f7b955;--bad:#ff5b6c;--steel:#9fb5c9;
+      --shadow:0 18px 48px rgba(0,0,0,.34);--r:10px
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      min-height:100vh;color:var(--txt);font-family:"IBM Plex Sans",sans-serif;padding:18px;
+      background:
+        linear-gradient(135deg,rgba(66,215,255,.11),transparent 34%),
+        linear-gradient(315deg,rgba(50,213,131,.08),transparent 30%),
+        repeating-linear-gradient(90deg,rgba(255,255,255,.018) 0,rgba(255,255,255,.018) 1px,transparent 1px,transparent 80px),
+        repeating-linear-gradient(0deg,rgba(255,255,255,.014) 0,rgba(255,255,255,.014) 1px,transparent 1px,transparent 80px),
+        var(--bg)
+    }
+    .dash{max-width:1760px;margin:0 auto;display:grid;gap:14px}
+    .top{
+      display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;
+      padding:16px 18px;border:1px solid var(--line);border-radius:var(--r);
+      background:linear-gradient(145deg,rgba(14,35,55,.92),rgba(8,20,34,.78));
+      box-shadow:var(--shadow);backdrop-filter:blur(14px)
+    }
+    .brand{display:grid;gap:4px}
+    .eyebrow{color:var(--cyan);font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em}
+    .title{font-family:"Space Grotesk",sans-serif;font-size:clamp(1.65rem,2.1vw,2.45rem);font-weight:700;letter-spacing:0}
+    .subtitle{color:var(--muted);font-size:.9rem}
+    .badges{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .badge{border:1px solid var(--line);border-radius:999px;padding:7px 11px;font-size:.78rem;color:var(--soft);background:rgba(12,31,49,.72);font-weight:700;white-space:nowrap}
+    .badge-live{color:#dfffee;border-color:rgba(50,213,131,.58);background:rgba(50,213,131,.16)}
+    .badge-offline{color:#ffe4e7;border-color:rgba(255,91,108,.58);background:rgba(255,91,108,.16)}
+    .kpiBand{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+    .kpi{
+      border:1px solid var(--line);border-radius:var(--r);background:linear-gradient(180deg,rgba(17,42,65,.86),rgba(9,24,39,.76));
+      padding:13px;min-height:104px;display:grid;gap:7px;align-content:space-between;box-shadow:0 10px 30px rgba(0,0,0,.2)
+    }
+    .kpi-label,.metric-label{color:#9eb8ca;font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+    .kpi-value{font-family:"Space Grotesk",sans-serif;font-size:1.55rem;font-weight:700;color:#f8fcff;line-height:1}
+    .kpi-unit,.metric-unit{color:#8ea8ba;font-size:.8rem;margin-left:4px}
+    .kpi-note,.metric-note{color:var(--muted);font-size:.72rem;line-height:1.25}
+    .cockpit{display:grid;grid-template-columns:minmax(280px,.86fr) minmax(520px,1.65fr) minmax(340px,1fr);gap:14px;align-items:start}
+    .column{display:grid;gap:14px}
+    .card,.chartCard{
+      border:1px solid var(--line);border-radius:var(--r);background:linear-gradient(180deg,var(--surface),var(--surface2));
+      padding:14px;display:grid;gap:12px;align-content:start;box-shadow:0 12px 34px rgba(0,0,0,.22);backdrop-filter:blur(12px)
+    }
+    .card h3,.chartCard h3{
+      font-family:"Space Grotesk",sans-serif;font-size:.96rem;color:#f5fbff;
+      padding-bottom:9px;border-bottom:1px solid var(--line2);letter-spacing:0
+    }
+    .card.compact{gap:10px}
+    .metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .metric{border:1px solid var(--line2);border-radius:8px;background:rgba(3,14,25,.42);padding:10px;display:grid;gap:5px;min-height:68px}
+    .metric-value{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:1.08rem;line-height:1;color:#f8fcff}
+    .metric-value,.kpi-value,.save,.scoreValue,.status,.note,.checkValue,.compareFill,.wasteItem,.insightRow strong{transition:color .18s ease,opacity .18s ease,background-color .18s ease,border-color .18s ease,width .22s ease}
+    .state{display:flex;flex-wrap:wrap;gap:9px 12px;color:#d7e6f2;font-size:.9rem}
+    .item{display:inline-flex;align-items:center;gap:7px}
+    .led{width:10px;height:10px;border-radius:999px;background:#697b89}
+    .led-on{background:var(--ok);box-shadow:0 0 14px rgba(50,213,131,.85)}
+    .led-off{background:#697b89}
+    .panel{border:1px solid var(--line2);border-radius:8px;background:rgba(3,14,25,.38);padding:11px;display:grid;gap:10px}
+    .sectionTitle{font-size:.72rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.1em;font-weight:700}
+    .btns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .btns.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+    button{
+      border:1px solid rgba(66,215,255,.42);border-radius:8px;background:rgba(66,215,255,.12);
+      color:#effaff;font-size:.78rem;font-weight:700;padding:9px 10px;cursor:pointer;transition:.15s;min-height:36px
+    }
+    button:hover{background:rgba(66,215,255,.22);border-color:rgba(66,215,255,.72)}
+    button.success{border-color:rgba(50,213,131,.55);background:rgba(50,213,131,.15)}
+    button.warning{border-color:rgba(247,185,85,.58);background:rgba(247,185,85,.14)}
+    button.danger{border-color:rgba(255,91,108,.62);background:rgba(255,91,108,.14)}
+    .row{display:grid;grid-template-columns:110px 1fr;gap:8px}
+    input{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;color:#f7fcff;background:rgba(3,14,25,.55);font-size:.88rem;outline:none}
+    .configGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .field{display:grid;gap:5px}
+    .field label{font-size:.68rem;color:#9eb8ca;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+    .study{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center}
+    .study strong{display:block;font-family:"Space Grotesk",sans-serif;font-size:1.18rem;color:#ffe08a}
+    .study span{font-size:.7rem;color:#9eb8ca;text-transform:uppercase;letter-spacing:.08em}
+    .save{font-family:"Space Grotesk",sans-serif;font-size:1.36rem;font-weight:700;text-align:center;line-height:1.1}
+    .note{text-align:center;font-size:.8rem;color:#a9c0d2}
+    .note-left{text-align:left}
+    .positive{color:var(--ok)!important}.negative{color:var(--bad)!important}.neutral{color:#d5e4f0!important}
+    .status{border:1px solid var(--line2);border-radius:8px;background:rgba(3,14,25,.45);color:#c9dae7;padding:8px 10px;font-size:.8rem;overflow-wrap:anywhere}
+    .anomNow{display:none;border:1px solid rgba(255,91,108,.48);background:rgba(255,91,108,.12);border-radius:8px;color:#ffdce1;padding:9px 10px;font-size:.8rem}
+    .summaryList{display:grid;gap:7px;font-size:.86rem;color:#d6e5ef}
+    .summaryList strong{font-family:"Space Grotesk",sans-serif;color:#fff;font-size:.95rem}
+    .list{display:none;max-height:190px;overflow:auto;border:1px solid var(--line2);border-radius:8px;background:rgba(3,14,25,.42);padding:8px}
+    .report{border-left:3px solid var(--cyan);background:rgba(8,28,48,.8);border-radius:7px;padding:8px;font-size:.77rem;color:#d8e9fb;margin-bottom:7px}
+    .rh{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;color:#9ec2e3;font-size:.74rem}
+    .rg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 8px}
+    .primaryChart canvas{height:430px!important}
+    canvas{width:100%!important;height:260px!important;background:rgba(3,14,25,.5);border-radius:8px;border:1px solid var(--line2);padding:10px}
+    .days{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .days button.active{background:rgba(66,215,255,.25);border-color:rgba(66,215,255,.85)}
+    .insightGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .insightRow{border:1px solid var(--line2);border-radius:8px;background:rgba(3,14,25,.42);padding:10px;display:grid;gap:5px}
+    .insightRow span{font-size:.68rem;color:#9eb8ca;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+    .insightRow strong{font-size:.92rem;color:#fff;line-height:1.36}
+    .scoreHero{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap}
+    .scoreValue{font-family:"Space Grotesk",sans-serif;font-size:1.9rem;font-weight:700;line-height:1;color:#ffe08a}
+    .statusPill{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:6px 10px;border:1px solid rgba(66,215,255,.42);background:rgba(66,215,255,.14);color:#e3f7ff;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+    .status-neutral{background:rgba(66,215,255,.14);border-color:rgba(66,215,255,.42);color:#e3f7ff}
+    .status-excellent{background:rgba(50,213,131,.16);border-color:rgba(50,213,131,.52);color:#ddffec}
+    .status-correct{background:rgba(58,141,255,.16);border-color:rgba(58,141,255,.52);color:#e1efff}
+    .status-watch{background:rgba(247,185,85,.16);border-color:rgba(247,185,85,.52);color:#ffe8bd}
+    .status-critical{background:rgba(255,91,108,.16);border-color:rgba(255,91,108,.58);color:#ffe1e5}
+    .checkList{display:grid;gap:5px}
+    .checkRow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line2);font-size:.82rem;color:#d6e5ef}
+    .checkRow:last-child{border-bottom:none}
+    .checkValue{font-weight:800}.okText{color:var(--ok)}.badText{color:var(--bad)}
+    .compareRows{display:grid;gap:9px}
+    .compareHead{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.8rem;color:#d3e6f4}
+    .compareHead span{font-weight:800;letter-spacing:.08em}.compareHead strong{font-family:"Space Grotesk",sans-serif;color:#fff}
+    .compareTrack{height:13px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.08);border:1px solid var(--line2)}
+    .compareFill{height:100%;min-width:6px;border-radius:999px;transition:width .25s ease}
+    .compareBefore{background:linear-gradient(90deg,var(--blue),var(--cyan))}
+    .compareAfter{background:linear-gradient(90deg,var(--ok),#8df5bd)}
+    .abox{border:1px solid var(--line2);border-radius:8px;background:rgba(3,14,25,.42);padding:10px;display:grid;gap:8px}
+    .atop{display:flex;justify-content:space-between;align-items:center;gap:10px;color:#9eb8ca;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;font-weight:800}
+    .atotalWrap{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .atotal{font-family:"Space Grotesk",sans-serif;font-size:1.8rem}
+    .atotal-ok{color:#7ef0aa}
+    .atotal-alert{color:#ffc4cb}
+    .anomalyState{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:5px 10px;font-size:.68rem;font-weight:800;letter-spacing:0;text-transform:none;white-space:nowrap}
+    .anomalyState-ok{background:rgba(50,213,131,.18);border:1px solid rgba(50,213,131,.52);color:#eafff3}
+    .anomalyState-alert{background:rgba(247,185,85,.16);border:1px solid rgba(247,185,85,.48);color:#ffe8bd}
+    .tags{display:flex;gap:6px;flex-wrap:wrap}
+    .tag{border-radius:999px;padding:4px 8px;font-size:.68rem;font-weight:800;color:#fff}
+    .over{background:#e64d5d}.temp{background:#d48630}.dht{background:#6872d9}.info{background:rgba(58,141,255,.2);border:1px solid rgba(58,141,255,.4);color:#e1efff}.ok{background:rgba(50,213,131,.18);border:1px solid rgba(50,213,131,.52);color:#eafff3}
+    .wasteList{display:grid;gap:8px}
+    .wasteItem{border:1px solid var(--line2);border-radius:8px;background:rgba(3,14,25,.42);padding:10px;display:grid;gap:4px}
+    .wasteItem.critical{border-color:rgba(255,91,108,.52);background:rgba(100,22,32,.25)}
+    .wasteItem.watch{border-color:rgba(247,185,85,.48);background:rgba(94,60,16,.22)}
+    .wasteTitle{font-weight:800;color:#fff}.wasteDetail{font-size:.82rem;color:#b8d2ea;line-height:1.4}
+    .flowCard{background:linear-gradient(180deg,rgba(10,31,48,.92),rgba(5,18,31,.82))}
+    .flowStack{display:grid;gap:0}
+    .flowNode{
+      display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:10px;
+      border:1px solid var(--line2);border-radius:10px;background:rgba(3,14,25,.45);padding:10px;
+      transition:border-color .18s ease,background-color .18s ease,box-shadow .18s ease
+    }
+    .flowNode strong{font-family:"Space Grotesk",sans-serif;font-size:.92rem;color:#fff;display:block}
+    .flowNode span{font-size:.72rem;color:#9eb8ca;display:block;margin-top:2px}
+    .flowIcon{
+      width:38px;height:38px;border-radius:10px;display:grid;place-items:center;
+      border:1px solid rgba(66,215,255,.38);background:rgba(66,215,255,.12);
+      color:#dff8ff;font-family:"Space Grotesk",sans-serif;font-size:.74rem;font-weight:800
+    }
+    .flowState{font-size:.66rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#8fa9bb}
+    .flowActive{border-color:rgba(50,213,131,.46);background:rgba(11,48,43,.38);box-shadow:0 0 24px rgba(50,213,131,.08)}
+    .flowActive .flowIcon{border-color:rgba(50,213,131,.56);background:rgba(50,213,131,.14);color:#e8fff2}
+    .flowActive .flowState{color:#90ffc0}
+    .flowWarn{border-color:rgba(247,185,85,.46);background:rgba(70,47,14,.24)}
+    .flowWarn .flowIcon{border-color:rgba(247,185,85,.5);background:rgba(247,185,85,.13)}
+    .flowWarn .flowState{color:#ffd58a}
+    .flowOffline{border-color:rgba(255,91,108,.42);background:rgba(72,19,29,.22)}
+    .flowOffline .flowState{color:#ff9daa}
+    .flowConnector{
+      width:2px;height:24px;margin-left:29px;position:relative;
+      background:linear-gradient(180deg,rgba(66,215,255,.85),rgba(50,213,131,.7))
+    }
+    .flowConnector::after{
+      content:"";position:absolute;left:50%;top:0;width:7px;height:7px;border-radius:999px;
+      transform:translateX(-50%);background:#9fffd1;box-shadow:0 0 14px rgba(80,255,190,.9);
+      animation:flowPulse 1.25s linear infinite
+    }
+    @keyframes flowPulse{0%{top:0;opacity:0}20%{opacity:1}100%{top:18px;opacity:0}}
+    .captureGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .captureItem{border:1px solid var(--line2);border-radius:8px;background:rgba(3,14,25,.42);padding:9px;display:grid;gap:4px;min-height:60px}
+    .captureItem span{font-size:.65rem;color:#9eb8ca;text-transform:uppercase;letter-spacing:.08em;font-weight:800}
+    .captureItem strong{font-family:"Space Grotesk",sans-serif;font-size:1rem;color:#fff;line-height:1.1}
+    .bottomWide canvas{height:360px!important}
+    .toast{position:fixed;right:16px;bottom:16px;border-radius:8px;border:1px solid rgba(50,213,131,.7);background:rgba(20,90,58,.94);color:#ecfff4;padding:10px 14px;font-size:.82rem;z-index:9999}
+    @media (max-width:1440px){.cockpit{grid-template-columns:1fr 1.35fr}.rightRail{grid-column:1/-1;grid-template-columns:repeat(2,minmax(0,1fr))}.kpiBand{grid-template-columns:repeat(3,minmax(0,1fr))}}
+    @media (max-width:980px){body{padding:12px}.cockpit,.rightRail{grid-template-columns:1fr}.kpiBand{grid-template-columns:repeat(2,minmax(0,1fr))}.insightGrid{grid-template-columns:1fr}.primaryChart canvas{height:320px!important}}
+    @media (max-width:620px){.kpiBand,.metrics,.btns,.btns.three,.row,.configGrid,.study,.captureGrid{grid-template-columns:1fr}.top{align-items:flex-start}.badges{justify-content:flex-start}canvas{height:230px!important}}
+  </style>
+</head>
+<body>
+  <div class="dash">
+    <header class="top">
+      <div class="brand">
+        <div class="eyebrow">IoT Energy Monitoring</div>
+        <h1 class="title">Smart Energy Audit 4.0</h1>
+        <div class="subtitle">Cockpit industriel de supervision énergétique ESP32</div>
+      </div>
+      <div class="badges">
+        <span class="badge">IoT Energy Monitoring</span>
+        <span class="badge">SCADA moderne</span>
+        <span id="liveBadge" class="badge badge-live">LIVE</span>
+        <span id="connBadge" class="badge">SYNC OK</span>
+        <span id="dataAge" class="badge">--</span>
+        <span id="currentClock" class="badge">--</span>
+      </div>
+    </header>
+
+    <section class="kpiBand" aria-label="Indicateurs clés temps réel">
+      <div class="kpi">
+        <div class="kpi-label">Température actuelle</div>
+        <div><span id="tempValue" class="kpi-value">--</span><span class="metric-unit"> °C</span></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Puissance actuelle</div>
+        <div><span id="powerValue" class="kpi-value">--</span><span class="metric-unit"> W</span></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Énergie totale</div>
+        <div><span id="energyValue" class="kpi-value">--</span><span class="metric-unit"> kWh</span></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Coût total</div>
+        <div><span id="costValue" class="kpi-value">--</span><span class="metric-unit"> MAD</span></div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Score instantané</div>
+        <div><span id="scoreValue" class="kpi-value">--</span><span class="metric-unit"> /100</span></div>
+        <div class="kpi-note">Basé sur la mesure actuelle</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Fiabilité des mesures</div>
+        <div><span id="reliabilityValue" class="kpi-value">--</span><span class="metric-unit"> %</span></div>
+        <div class="kpi-note">Qualité des données reçues</div>
+      </div>
+    </section>
+
+    <main class="cockpit">
+      <section class="column leftRail" aria-label="Supervision temps réel">
+        <article class="card">
+          <h3>SUPERVISION TEMPS RÉEL</h3>
+          <div class="panel">
+            <div class="sectionTitle">État équipements</div>
+            <div class="state"><span class="item"><span id="lampLed" class="led led-off"></span><span id="lampText">Lampe: --</span></span><span class="item"><span id="fanLed" class="led led-off"></span><span id="fanText">Ventilateur: --</span></span></div>
+            <div class="state"><span id="modeText">Mode: --</span><span id="thermalStateText">État thermique: --</span></div>
+            <div class="state"><span id="recommendedActionText">Action recommandée: --</span><span id="autoCommandText">Commande auto: --</span></div>
+            <div class="state"><span>Alertes: <strong id="alertsValue">--</strong></span><span id="timestampText">Dernière donnée: --</span></div>
+            <div id="currentAnomalies" class="anomNow"></div>
+          </div>
+        </article>
+
+        <article class="card">
+          <h3>ZONE DE CONFORT THERMIQUE</h3>
+          <div class="panel">
+            <div class="configGrid">
+              <div class="field">
+                <label for="comfortMin">Temp. min</label>
+                <input id="comfortMin" value="20" inputmode="decimal">
+              </div>
+              <div class="field">
+                <label for="comfortMax">Temp. max</label>
+                <input id="comfortMax" value="26" inputmode="decimal">
+              </div>
+              <div class="field">
+                <label for="criticalTemp">Temp. critique</label>
+                <input id="criticalTemp" value="30" inputmode="decimal">
+              </div>
+            </div>
+            <button onclick="applyComfortProfile()">APPLIQUER</button>
+            <div class="summaryList">
+              <div>Température actuelle : <strong id="comfortCurrentTemp">--</strong></div>
+              <div>État : <strong id="comfortCurrentState">--</strong></div>
+              <div>Action recommandée : <strong id="comfortCurrentAction">--</strong></div>
+              <div>Alerte critique : <strong id="comfortCriticalStatus">--</strong></div>
+            </div>
+          </div>
+          <div id="comfortProfileStatus" class="status">Profil de confort en attente</div>
+        </article>
+
+        <article class="card flowCard">
+          <h3>CHAÎNE IOT TEMPS RÉEL</h3>
+          <div class="panel">
+            <div class="sectionTitle">Flux actif de données</div>
+            <div class="flowStack" aria-label="Flux ESP32 vers dashboard">
+              <div id="flowEspNode" class="flowNode">
+                <div class="flowIcon">ESP</div>
+                <div><strong>ESP32</strong><span>Capteurs température, puissance, état charges</span></div>
+                <b id="flowEspStatus" class="flowState">--</b>
+              </div>
+              <div class="flowConnector"></div>
+              <div id="flowApiNode" class="flowNode">
+                <div class="flowIcon">API</div>
+                <div><strong>Flask API</strong><span>/api/ingest puis /api/latest</span></div>
+                <b id="flowApiStatus" class="flowState">--</b>
+              </div>
+              <div class="flowConnector"></div>
+              <div id="flowDbNode" class="flowNode">
+                <div class="flowIcon">DB</div>
+                <div><strong>SQLite</strong><span>Historique énergétique exploitable</span></div>
+                <b id="flowDbStatus" class="flowState">--</b>
+              </div>
+              <div class="flowConnector"></div>
+              <div id="flowDashNode" class="flowNode">
+                <div class="flowIcon">UI</div>
+                <div><strong>Dashboard</strong><span>Rendu cockpit actualisé en 1 seconde</span></div>
+                <b id="flowDashStatus" class="flowState">--</b>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="sectionTitle">Données captées maintenant</div>
+            <div class="captureGrid">
+              <div class="captureItem"><span>Présence</span><strong id="iotPresenceNow">--</strong></div>
+              <div class="captureItem"><span>Fenêtre</span><strong id="iotWindowNow">--</strong></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="sectionTitle">Commandes matérielles</div>
+            <div class="btns">
+              <button class="success" onclick="cmd('lamp_on')">LAMP ON</button>
+              <button class="warning" onclick="cmd('lamp_off')">LAMP OFF</button>
+              <button class="success" onclick="cmd('fan_on')">FAN ON</button>
+              <button class="warning" onclick="cmd('fan_off')">FAN OFF</button>
+              <button onclick="cmd('fan_auto')">FAN AUTO</button>
+              <button class="danger" onclick="cmd('reboot')">REBOOT ESP32</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="sectionTitle">Paramètres acquisition</div>
+            <div class="row"><input id="period" value="2000" inputmode="numeric"><button onclick="setPeriod()">APPLIQUER PÉRIODE</button></div>
+            <div class="row"><input id="newPrice" value="1.20" inputmode="decimal"><button onclick="setPrice()">CHANGER PRIX</button></div>
+          </div>
+          <div id="cmdStatus" class="status">Prêt</div>
+        </article>
+      </section>
+
+      <section class="column centerRail" aria-label="Analyse et graphiques">
+        <section class="chartCard primaryChart"><h3>PUISSANCE & TEMPÉRATURE - HISTORIQUE</h3><canvas id="chart"></canvas></section>
+
+        <article class="card">
+          <h3>INTERPRÉTATION INTELLIGENTE</h3>
+          <div class="panel insightGrid">
+            <div class="insightRow"><span>Situation actuelle</span><strong id="insightSituation">En attente de données temps réel.</strong></div>
+            <div class="insightRow"><span>Cause probable</span><strong id="insightCause">Le système attend les prochaines mesures pour qualifier l'état énergétique.</strong></div>
+            <div class="insightRow"><span>Impact énergétique</span><strong id="insightImpact">Aucune estimation disponible tant qu'une télémétrie récente n'est pas reçue.</strong></div>
+            <div class="insightRow"><span>Recommandation</span><strong id="insightRecommendation">Maintenir la collecte, puis actualiser l'audit avant/après.</strong></div>
+          </div>
+        </article>
+
+        <article class="card">
+          <h3>SCORE GLOBAL</h3>
+          <div class="panel">
+            <div class="scoreHero">
+              <div>
+                <div class="metric-label">Score global</div>
+                <div class="scoreValue"><span id="globalScoreValue">--</span><span class="metric-unit">/100</span></div>
+                <div class="metric-note">Tient compte du contexte</div>
+              </div>
+              <span id="globalScoreStatus" class="statusPill status-neutral">En attente</span>
+            </div>
+            <div id="globalScoreAnalysis" class="note note-left">Analyse en attente de données énergétiques suffisantes.</div>
+          </div>
+          <div class="panel">
+            <div class="scoreHero">
+              <div>
+                <div class="metric-label">Fiabilité des mesures</div>
+                <div id="reliabilitySummary" class="note note-left">Les critères de fraîcheur, fréquence et cohérence seront évalués automatiquement.</div>
+              </div>
+              <span id="reliabilityStatus" class="statusPill status-neutral">Analyse en attente</span>
+            </div>
+            <div class="checkList">
+              <div class="checkRow"><span>Données récentes</span><strong id="reliabilityFresh" class="checkValue">--</strong></div>
+              <div class="checkRow"><span>Fréquence stable</span><strong id="reliabilityFrequency" class="checkValue">--</strong></div>
+              <div class="checkRow"><span>Température disponible</span><strong id="reliabilityTemp" class="checkValue">--</strong></div>
+              <div class="checkRow"><span>Puissance disponible</span><strong id="reliabilityPower" class="checkValue">--</strong></div>
+              <div class="checkRow"><span>Valeurs cohérentes</span><strong id="reliabilityCoherence" class="checkValue">--</strong></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <h3>GASPILLAGE DÉTECTÉ</h3>
+          <div class="abox">
+            <div class="atop"><span>Anomalies actives</span><span class="atotalWrap"><span id="anomalyTotal" class="atotal atotal-ok">0</span><span id="anomalyStateLabel" class="anomalyState anomalyState-ok">Système normal</span></span></div>
+            <div id="anomalyActiveTags" class="tags"><span class="tag ok">Aucune anomalie active</span></div>
+            <div id="anomalyWindowNote" class="note note-left">Mesures concernées sur 60 min : 0</div>
+          </div>
+          <div class="panel">
+            <div class="atop"><span>Lecture jury</span><span id="wasteStatus" class="statusPill status-neutral">En attente</span></div>
+            <div id="wasteList" class="wasteList">
+              <div class="wasteItem">
+                <div class="wasteTitle">Aucune lecture métier disponible</div>
+                <div class="wasteDetail">Le cockpit attend les prochaines mesures et l'analyse d'anomalies pour qualifier les pertes énergétiques.</div>
+              </div>
+            </div>
+          </div>
+          <div class="btns"><button onclick="anom(true)">ANALYSER ANOMALIES</button></div>
+        </article>
+
+      </section>
+
+      <aside class="column rightRail" aria-label="Audit et décision">
+        <article class="card">
+          <h3>AUDIT ÉNERGÉTIQUE AVANT/APRÈS</h3>
+          <div class="panel">
+            <div class="scoreHero">
+              <div>
+                <div class="sectionTitle">Audit énergétique avant/après</div>
+                <div class="note note-left">Mode audit énergétique actif - une seule chaîne officielle basée sur les routes /api/study/*.</div>
+              </div>
+              <span id="studyPhaseStatus" class="statusPill status-neutral">IDLE</span>
+            </div>
+            <div class="btns">
+              <button class="success" onclick="startBeforeStudy()">Démarrer AVANT</button>
+              <button class="warning" onclick="stopBeforeStudy()">Stop AVANT</button>
+              <button onclick="startAfterStudy()">Démarrer APRÈS</button>
+              <button class="warning" onclick="stopAfterStudy()">Stop APRÈS</button>
+              <button onclick="refreshStudyResult()">Actualiser résultat</button>
+              <button onclick="resetStudyAudit()">Réinitialiser audit</button>
+            </div>
+          </div>
+          <div class="study">
+            <div><strong id="studyBeforeValue">0.000000</strong><span>avant kWh</span></div>
+            <div><strong id="studyAfterValue">0.000000</strong><span>après kWh</span></div>
+            <div><strong id="studyGainValue">0.000000</strong><span>gain kWh</span></div>
+          </div>
+          <div class="compareRows">
+            <div class="compareRow">
+              <div class="compareHead"><span>AVANT</span><strong id="studyBeforeBarValue">0.000000 kWh</strong></div>
+              <div class="compareTrack"><div id="studyBeforeBar" class="compareFill compareBefore" style="width:6px"></div></div>
+            </div>
+            <div class="compareRow">
+              <div class="compareHead"><span>APRÈS</span><strong id="studyAfterBarValue">0.000000 kWh</strong></div>
+              <div class="compareTrack"><div id="studyAfterBar" class="compareFill compareAfter" style="width:6px"></div></div>
+            </div>
+          </div>
+          <div id="studySavingsMad" class="save neutral">0.0000 MAD</div>
+          <div id="studyVisualGain" class="note">Gain : 0.000000 kWh | Réduction : 0.00 %</div>
+          <div class="summaryList">
+            <div>Réduction : <strong><span id="studySavingsPercent">0.00</span>%</strong></div>
+            <div>Économie coût : <strong id="studyCostSavingValue">0.0000 MAD</strong></div>
+            <div>Durée AVANT : <strong id="studyDurationBefore">0</strong> s</div>
+            <div>Durée APRÈS : <strong id="studyDurationAfter">0</strong> s</div>
+          </div>
+          <div class="btns"><button onclick="loadDailyReports()">RAPPORTS QUOTIDIENS</button><button onclick="requestDailyReportNow()">DAILY REPORT NOW</button></div>
+          <div id="dailyReportsContainer" class="list"><div id="dailyReportsList"></div></div>
+        </article>
+
+        <article class="card">
+          <h3>AUDIT FINANCIER & PRÉVISION</h3>
+          <div class="metrics">
+            <div class="metric"><div class="metric-label">Coût total actuel</div><div><span id="financeTotalCost" class="metric-value">0.00</span><span class="metric-unit">MAD</span></div></div>
+            <div class="metric"><div class="metric-label">Énergie totale actuelle</div><div><span id="financeTotalEnergy" class="metric-value">0.0000</span><span class="metric-unit">kWh</span></div></div>
+            <div class="metric"><div class="metric-label">Prix / kWh</div><div><span id="financePrice" class="metric-value">1.20</span><span class="metric-unit">MAD</span></div></div>
+            <div class="metric"><div class="metric-label">Puissance moyenne</div><div><span id="predPower" class="metric-value">--</span><span class="metric-unit">W</span></div></div>
+            <div class="metric"><div class="metric-label">Projection 1h</div><div><span id="predEnergy" class="metric-value">--</span><span class="metric-unit">kWh</span></div></div>
+            <div class="metric"><div class="metric-label">Projection 24h</div><div><span id="predEnergy24" class="metric-value">--</span><span class="metric-unit">kWh</span></div></div>
+            <div class="metric"><div class="metric-label">Énergie prévue 24h</div><div><span id="financePredEnergy24" class="metric-value">--</span><span class="metric-unit">kWh</span></div></div>
+            <div class="metric"><div class="metric-label">Coût prévu 24h</div><div><span id="financePredCost24" class="metric-value">--</span><span class="metric-unit">MAD</span></div></div>
+            <div class="metric"><div class="metric-label">Coût mensuel estimé</div><div><span id="financePredMonthly" class="metric-value">--</span><span class="metric-unit">MAD</span></div></div>
+            <div class="metric"><div class="metric-label">Risque énergétique</div><div><span id="predRisk" class="metric-value">--</span></div></div>
+          </div>
+          <div class="panel">
+            <div class="summaryList">
+              <div>Situation actuelle : <strong id="financeSituation">Collecte temps réel en attente</strong></div>
+              <div>Projection : <strong id="financeProjectionStatus">Prévision 24h en attente</strong></div>
+            </div>
+          </div>
+          <div class="btns"><button onclick="predict()">ACTUALISER PRÉVISION</button></div>
+          <div id="iaInfo" class="status">Prévision: en attente</div>
+        </article>
+      </aside>
+    </main>
+
+    <section class="chartCard bottomWide">
+      <h3>EVOLUTION SCORES & ENERGIE</h3>
+      <div class="days"><button id="day7" class="active" onclick="setDays(7)">7 jours</button><button id="day14" onclick="setDays(14)">14 jours</button><button id="day30" onclick="setDays(30)">30 jours</button></div>
+      <canvas id="dailyScoresChart"></canvas>
+    </section>
+  </div>
+
+  <script>
+    const API_TOKEN = "esp32_maison_2024";
+    const DEVICE_ID = "esp32-1";
+    const DASH_REFRESH_MS = 1000;
+    let chart = null, dailyScoresChart = null, lastData = null, selectedDays = 7, dashboardTick = 0;
+    let latestPredictionData = null, latestAnomalySummary = null;
+    let historyHealth = { count: 0, stable: false, avgGapSeconds: null };
+    let updateInFlight = false, connectionStable = true;
+    const lastCommandAt = {};
+
+    function isCommandRateLimited(command, cooldownMs = 700) { const now = Date.now(), last = lastCommandAt[command] || 0; if (now - last < cooldownMs) return true; lastCommandAt[command] = now; return false; }
+    const toBool = (v) => v === true || v === 1 || v === "1" || v === "true";
+    const clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
+
+    const thermalLabels = { trop_chaud: "Trop chaud", confort: "Confort", trop_froid: "Trop froid" };
+    const actionLabels = { fan_on: "Activer ventilateur", heating_alert: "Alerte chauffage", none: "Aucune" };
+    const anomalyLabels = {
+      waste_lighting_absence: "Gaspillage eclairage en absence",
+      waste_ventilation_absence: "Gaspillage ventilation en absence",
+      overpower: "Surconsommation",
+      open_window_ventilation_loss: "Fenetre ouverte avec ventilation"
+    };
+    const activeAnomalyTags = [
+      { key: "dht_fail", label: "Capteur température en défaut", className: "dht" },
+      { key: "overpower", label: "Surconsommation active", className: "over" },
+      { key: "temp", label: "Température critique", className: "temp" }
+    ];
+
+    function parseAnomalyPayload(payload) {
+      if (Array.isArray(payload)) return payload.map((item) => String(item || "").trim()).filter(Boolean);
+      if (typeof payload === "string" && payload.trim()) {
+        try {
+          const parsed = JSON.parse(payload);
+          return Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    }
+
+    function getAnomalyCodes(d = {}) {
+      const codes = new Set();
+      parseAnomalyPayload(d.energy_anomaly).forEach((code) => codes.add(code));
+      parseAnomalyPayload(d.energy_anomaly_json).forEach((code) => codes.add(code));
+      return [...codes];
+    }
+
+    function renderAnomalySummary(summary = latestAnomalySummary) {
+      const total = Number(summary && summary.total || 0);
+      const windowTotal = Number(summary && summary.window_total || 0);
+      const minutes = Number(summary && summary.minutes || 60);
+      const totalEl = document.getElementById("anomalyTotal");
+      const stateEl = document.getElementById("anomalyStateLabel");
+      const tagsEl = document.getElementById("anomalyActiveTags");
+      const noteEl = document.getElementById("anomalyWindowNote");
+      if (totalEl) totalEl.textContent = total.toFixed(0);
+      if (totalEl) totalEl.className = `atotal ${total > 0 ? "atotal-alert" : "atotal-ok"}`;
+      if (stateEl) stateEl.textContent = total > 0 ? "Sous surveillance" : "Système normal";
+      if (stateEl) stateEl.className = `anomalyState ${total > 0 ? "anomalyState-alert" : "anomalyState-ok"}`;
+
+      if (tagsEl) {
+        const activeItems = activeAnomalyTags.filter((item) => Number(summary && summary[item.key] || 0) > 0);
+        tagsEl.innerHTML = activeItems.length
+          ? activeItems.map((item) => `<span class="tag ${item.className}">${item.label}</span>`).join("")
+          : '<span class="tag ok">Aucune anomalie active</span>';
+      }
+
+      if (noteEl) {
+        noteEl.textContent = `Mesures concernées sur ${minutes.toFixed(0)} min : ${windowTotal.toFixed(0)}`;
+      }
+    }
+
+    function setPillState(id, label, tone = "neutral") {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = label;
+      el.className = `statusPill status-${tone}`;
+    }
+
+    function setCheckState(id, ok, okLabel = "OK", badLabel = "A verifier") {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = ok ? okLabel : badLabel;
+      el.className = `checkValue ${ok ? "okText" : "badText"}`;
+    }
+
+    function showToast(msg, type = "success") {
+      const t = document.createElement("div");
+      t.className = "toast";
+      if (type !== "success") { t.style.borderColor = "rgba(255,100,109,.75)"; t.style.background = "rgba(110,20,25,.95)"; t.style.color = "#ffe7e9"; }
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 2600);
+    }
+
+    async function fetchJSON(url, opts = {}) {
+      opts.headers = opts.headers || {};
+      opts.headers["X-API-TOKEN"] = API_TOKEN;
+      if (opts.body && typeof opts.body !== "string") { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(opts.body); }
+      try {
+        const r = await fetch(url, opts);
+        const raw = await r.text();
+        let data;
+        try { data = JSON.parse(raw); } catch { data = { ok: false, error: raw ? raw.slice(0, 300) : "invalid response" }; }
+        return { status: r.status, data };
+      } catch { return { status: 0, data: { ok: false, error: "network error" } }; }
+    }
+
+    function setCommandStatus(text, error = false) {
+      const el = document.getElementById("cmdStatus");
+      el.textContent = text;
+      el.style.borderColor = error ? "rgba(255,100,109,.65)" : "rgba(40,90,140,.8)";
+    }
+
+    function setComfortStatus(text, error = false) {
+      const el = document.getElementById("comfortProfileStatus");
+      el.textContent = text;
+      el.style.borderColor = error ? "rgba(255,100,109,.65)" : "rgba(40,90,140,.8)";
+    }
+
+    function setLiveBadge(isLive, age) {
+      const live = document.getElementById("liveBadge");
+      live.className = isLive ? "badge badge-live" : "badge badge-offline";
+      live.textContent = isLive ? "LIVE" : "OFFLINE";
+      document.getElementById("dataAge").textContent = `${age}s`;
+    }
+
+    function setConnectionBadge(stable = true) {
+      const badge = document.getElementById("connBadge");
+      if (!badge) return;
+      connectionStable = stable;
+      badge.className = stable ? "badge badge-live" : "badge badge-offline";
+      badge.textContent = stable ? "SYNC OK" : "Connexion instable";
+    }
+
+    function updateClock() {
+      const el = document.getElementById("currentClock");
+      if (!el) return;
+      el.textContent = new Date().toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "medium" });
+    }
+
+    function setStudyPhaseStatus(phase = "idle") {
+      const el = document.getElementById("studyPhaseStatus");
+      if (!el) return;
+      const normalized = String(phase || "idle").toLowerCase();
+      const labels = {
+        idle: "IDLE",
+        before: "RECORDING BEFORE",
+        after: "RECORDING AFTER",
+        recording_before: "RECORDING BEFORE",
+        recording_after: "RECORDING AFTER"
+      };
+      const tones = {
+        idle: "neutral",
+        before: "watch",
+        after: "correct",
+        recording_before: "watch",
+        recording_after: "correct"
+      };
+      el.textContent = labels[normalized] || normalized.toUpperCase();
+      el.className = `statusPill status-${tones[normalized] || "neutral"}`;
+    }
+
+    function applySavingsColor(value, node) {
+      node.classList.remove("positive", "negative", "neutral");
+      if (value > 0.0001) node.classList.add("positive");
+      else if (value < -0.0001) node.classList.add("negative");
+      else node.classList.add("neutral");
+    }
+
+    function updateSavingsVisual(mad, percent) {
+      const m = Number(mad || 0), p = Number(percent || 0);
+      const madEl = document.getElementById("studySavingsMad"), pctEl = document.getElementById("studySavingsPercent");
+      madEl.textContent = `${m >= 0 ? "+" : ""}${m.toFixed(4)} MAD`;
+      pctEl.textContent = p.toFixed(2);
+      document.getElementById("studyCostSavingValue").textContent = `${m.toFixed(4)} MAD`;
+      applySavingsColor(m, madEl); applySavingsColor(m, pctEl);
+    }
+
+    function updateFinancePrice(price) {
+      const numericPrice = Number(price);
+      if (!Number.isFinite(numericPrice) || numericPrice <= 0) return;
+      document.getElementById("financePrice").textContent = numericPrice.toFixed(2);
+      document.getElementById("newPrice").value = numericPrice.toFixed(2);
+    }
+
+    function updateStudyResult(result) {
+      const beforeKwh = Number(result.before_kwh || 0);
+      const afterKwh = Number(result.after_kwh || 0);
+      const gainKwh = Number(result.gain_kwh || 0);
+      const reduction = Number(result.reduction_percent || 0);
+      const costSaving = Number(result.cost_saving || 0);
+      const durationBefore = Number(result.duration_before || 0);
+      const durationAfter = Number(result.duration_after || 0);
+
+      document.getElementById("studyBeforeValue").textContent = beforeKwh.toFixed(6);
+      document.getElementById("studyAfterValue").textContent = afterKwh.toFixed(6);
+      document.getElementById("studyGainValue").textContent = gainKwh.toFixed(6);
+      document.getElementById("studyDurationBefore").textContent = durationBefore.toFixed(0);
+      document.getElementById("studyDurationAfter").textContent = durationAfter.toFixed(0);
+      document.getElementById("studyBeforeBarValue").textContent = `${beforeKwh.toFixed(6)} kWh`;
+      document.getElementById("studyAfterBarValue").textContent = `${afterKwh.toFixed(6)} kWh`;
+      document.getElementById("studyVisualGain").textContent = `Gain : ${gainKwh.toFixed(6)} kWh | Réduction : ${reduction.toFixed(2)} %`;
+      const maxKwh = Math.max(beforeKwh, afterKwh, 0.000001);
+      const beforeWidth = beforeKwh > 0 ? Math.max(8, (beforeKwh / maxKwh) * 100) : 0;
+      const afterWidth = afterKwh > 0 ? Math.max(8, (afterKwh / maxKwh) * 100) : 0;
+      document.getElementById("studyBeforeBar").style.width = `${beforeWidth}%`;
+      document.getElementById("studyAfterBar").style.width = `${afterWidth}%`;
+      updateSavingsVisual(costSaving, reduction);
+    }
+
+    function formatRiskLevel(level) {
+      const normalized = String(level || "").toLowerCase();
+      if (normalized === "critical") return "CRITIQUE";
+      if (normalized === "warning") return "ATTENTION";
+      if (normalized === "normal") return "NORMAL";
+      return level || "--";
+    }
+
+    function formatThermalState(state) { return thermalLabels[state] || "N/A"; }
+    function formatAction(action) { return actionLabels[action] || "Aucune"; }
+
+    function getCurrentAnomalyLabels(d) {
+      const arr = getAnomalyCodes(d).map((code) => anomalyLabels[code] || code);
+      if (toBool(d.critical_temp_alert)) arr.push("Temperature critique");
+      if (toBool(d.anomaly_dht_fail)) arr.push("Capteur thermique en defaut");
+      return arr;
+    }
+
+    function updateComfortSummary(d) {
+      document.getElementById("comfortCurrentTemp").textContent = `${Number(d.temp_c || 0).toFixed(1)} C`;
+      document.getElementById("comfortCurrentState").textContent = formatThermalState(d.thermal_state);
+      document.getElementById("comfortCurrentAction").textContent = formatAction(d.recommended_action);
+      document.getElementById("comfortCriticalStatus").textContent = toBool(d.critical_temp_alert) ? "Oui" : "Non";
+    }
+
+    async function loadComfortProfile() {
+      const r = await fetchJSON("/api/get_comfort_profile");
+      if (r.status === 200 && r.data && r.data.ok && r.data.profile) {
+        document.getElementById("comfortMin").value = Number(r.data.profile.comfort_min_c || 20).toFixed(1);
+        document.getElementById("comfortMax").value = Number(r.data.profile.comfort_max_c || 26).toFixed(1);
+        document.getElementById("criticalTemp").value = Number(r.data.profile.critical_temp_c || 30).toFixed(1);
+        setComfortStatus("Profil de confort charge");
+      } else {
+        setComfortStatus("Impossible de charger le profil de confort", true);
+      }
+    }
+
+    async function applyComfortProfile() {
+      const comfort_min_c = parseFloat(document.getElementById("comfortMin").value);
+      const comfort_max_c = parseFloat(document.getElementById("comfortMax").value);
+      const critical_temp_c = parseFloat(document.getElementById("criticalTemp").value);
+      if ([comfort_min_c, comfort_max_c, critical_temp_c].some((v) => Number.isNaN(v))) { showToast("Profil de confort invalide", "error"); return; }
+      setComfortStatus("Mise a jour du profil...");
+      const r = await fetchJSON("/api/set_comfort_profile", { method: "POST", body: { comfort_min_c, comfort_max_c, critical_temp_c } });
+      if (r.status === 200 && r.data && r.data.ok) {
+        setComfortStatus("Profil de confort applique");
+        showToast("Zone de confort mise a jour");
+        await loadComfortProfile();
+      } else {
+        const msg = r.data && r.data.error ? r.data.error : r.status;
+        setComfortStatus(`Echec profil: ${msg}`, true);
+        showToast("Echec profil de confort", "error");
+      }
+    }
+
+    function setFlowNodeState(nodeId, statusId, label, tone = "active") {
+      const node = document.getElementById(nodeId);
+      const status = document.getElementById(statusId);
+      if (!node || !status) return;
+      node.classList.remove("flowActive", "flowWarn", "flowOffline");
+      if (tone === "offline") node.classList.add("flowOffline");
+      else if (tone === "warn") node.classList.add("flowWarn");
+      else node.classList.add("flowActive");
+      status.textContent = label;
+    }
+
+    function setNodeText(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    }
+
+    function renderIoTFlow(d = {}) {
+      const ts = Number(d.ts || 0);
+      const age = ts > 0 ? Math.max(0, Math.floor(Date.now() / 1000) - ts) : 9999;
+      const live = age <= 15;
+      const apiReady = ts > 0 && age <= 30;
+      const historyCount = Number(historyHealth.count || 0);
+
+      setFlowNodeState("flowEspNode", "flowEspStatus", live ? "LIVE" : "OFFLINE", live ? "active" : "offline");
+      setFlowNodeState("flowApiNode", "flowApiStatus", apiReady ? "OK" : (ts > 0 ? "RETARD" : "WAIT"), apiReady ? "active" : "warn");
+      setFlowNodeState("flowDbNode", "flowDbStatus", historyCount > 0 ? `${historyCount} PTS` : "WAIT", historyCount > 0 ? "active" : "warn");
+      setFlowNodeState("flowDashNode", "flowDashStatus", "1 S", "active");
+
+      setNodeText("iotPresenceNow", typeof d.presence === "undefined" ? "--" : (toBool(d.presence) ? "Détectée" : "Absente"));
+      setNodeText("iotWindowNow", typeof d.window_open === "undefined" ? "--" : (toBool(d.window_open) ? "Ouverte" : "Fermée"));
+    }
+
+    function renderLatestUI(d) {
+      document.getElementById("tempValue").textContent = Number(d.temp_c || 0).toFixed(1);
+      document.getElementById("powerValue").textContent = Number(d.power_w || 0).toFixed(0);
+      document.getElementById("energyValue").textContent = Number(d.energy_total_kwh || 0).toFixed(4);
+      document.getElementById("costValue").textContent = Number(d.cost_mad || 0).toFixed(2);
+      document.getElementById("scoreValue").textContent = Number(d.comfort_score || 0).toFixed(0);
+      document.getElementById("alertsValue").textContent = Number(d.alerts || 0).toFixed(0);
+      const lampOn = toBool(d.lamp_on), fanOn = toBool(d.fan_on);
+      document.getElementById("lampLed").className = `led ${lampOn ? "led-on" : "led-off"}`;
+      document.getElementById("lampText").textContent = `Lampe: ${lampOn ? "ON" : "OFF"}`;
+      document.getElementById("fanLed").className = `led ${fanOn ? "led-on" : "led-off"}`;
+      document.getElementById("fanText").textContent = `Ventilateur: ${fanOn ? "ON" : "OFF"}`;
+      document.getElementById("modeText").textContent = `Mode: ${d.mode || "N/A"}`;
+      document.getElementById("thermalStateText").textContent = `Etat thermique: ${formatThermalState(d.thermal_state)}`;
+      document.getElementById("recommendedActionText").textContent = `Action recommandee: ${formatAction(d.recommended_action)}`;
+      document.getElementById("autoCommandText").textContent = `Commande auto: ${d.auto_command ? formatAction(d.auto_command) : "Aucune"}`;
+      const arr = getCurrentAnomalyLabels(d);
+      const box = document.getElementById("currentAnomalies");
+      if (arr.length) { box.style.display = "block"; box.textContent = arr.join(" | "); } else { box.style.display = "none"; box.textContent = ""; }
+      const ts = Number(d.ts || 0), age = ts > 0 ? Math.max(0, Math.floor(Date.now() / 1000) - ts) : 9999, t = ts > 0 ? new Date(ts * 1000).toLocaleTimeString() : "--";
+      document.getElementById("timestampText").textContent = `Derniere donnee: ${t} (il y a ${age}s)`;
+      setLiveBadge(age <= 15, age);
+      updateComfortSummary(d);
+      renderIoTFlow(d);
+    }
+
+    function renderPredictionUI() {
+      if (!latestPredictionData || typeof latestPredictionData.avg_power_w === "undefined") return;
+      setNodeText("predPower", Number(latestPredictionData.avg_power_w || 0).toFixed(0));
+      setNodeText("predEnergy", Number(latestPredictionData.predicted_kwh_1h || 0).toFixed(4));
+      setNodeText("predEnergy24", Number(latestPredictionData.predicted_kwh_24h || 0).toFixed(4));
+      setNodeText("predRisk", formatRiskLevel(latestPredictionData.risk_level));
+      setNodeText("iaInfo", `Prévision OK | risque ${formatRiskLevel(latestPredictionData.risk_level).toLowerCase()}`);
+    }
+
+    function updateUI() {
+      if (lastData) {
+        renderLatestUI(lastData);
+        updateFinanceFromTelemetry(lastData);
+      }
+      renderPredictionUI();
+      refreshInsightPanels();
+    }
+
+    const updateFinanceFromTelemetry = (d) => {
+      document.getElementById("financeTotalCost").textContent = Number(d.cost_mad || 0).toFixed(2);
+      document.getElementById("financeTotalEnergy").textContent = Number(d.energy_total_kwh || 0).toFixed(4);
+      if (typeof d.price_per_kwh !== "undefined") updateFinancePrice(d.price_per_kwh);
+    };
+
+    function buildWasteEvents(d = {}, summary = latestAnomalySummary) {
+      const events = [];
+      const seen = new Set();
+      const anomalies = getAnomalyCodes(d);
+      const hasPresence = typeof d.presence !== "undefined" && d.presence !== null;
+      const absenceDetected = hasPresence && !toBool(d.presence);
+      const fanOn = toBool(d.fan_on);
+      const lampOn = toBool(d.lamp_on);
+      const addEvent = (id, title, detail, tone = "watch") => {
+        if (seen.has(id)) return;
+        seen.add(id);
+        events.push({ id, title, detail, tone });
+      };
+
+      if (anomalies.includes("waste_ventilation_absence") || (absenceDetected && fanOn)) {
+        addEvent("waste_ventilation_absence", "Ventilateur actif sans présence", "La ventilation tourne alors qu'aucune présence n'est détectée. Revenir en mode auto ou couper le ventilateur évite une dépense inutile.", "critical");
+      }
+      if (anomalies.includes("waste_lighting_absence") || (absenceDetected && lampOn)) {
+        addEvent("waste_lighting_absence", "Lampe active sans présence", "L'éclairage reste allumé sans usage immédiat. Couper la lampe réduit directement le gaspillage d'énergie.", "watch");
+      }
+      if (anomalies.includes("open_window_ventilation_loss")) {
+        addEvent("open_window_ventilation_loss", "Pertes thermiques avec ventilation", "Une ouverture combinée à la ventilation provoque une perte énergétique continue. Vérifier les ouvertures avant de maintenir la ventilation.", "critical");
+      }
+      if (anomalies.includes("overpower") || Number(d.power_w || 0) >= 500 || Number(summary && summary.overpower || 0) > 0) {
+        addEvent("overpower", "Surconsommation détectée", "La puissance instantanée dépasse le profil normal. Identifier la charge responsable permet de réduire le coût global.", "critical");
+      }
+      if (toBool(d.critical_temp_alert) || Number(summary && summary.temp || 0) > 0) {
+        addEvent("critical_temp", "Température critique ou hors plage", "La zone sort du confort thermique, ce qui peut déclencher davantage de ventilation ou de chauffage.", "watch");
+      }
+      if (toBool(d.anomaly_dht_fail) || Number(summary && summary.dht_fail || 0) > 0) {
+        addEvent("sensor_check", "Capteur thermique à vérifier", "Certaines mesures récentes semblent instables. La fiabilité de l'audit dépend d'une lecture thermique cohérente.", "watch");
+      }
+
+      return events;
+    }
+
+    function renderWastePanel() {
+      const list = document.getElementById("wasteList");
+      const wasteEvents = buildWasteEvents(lastData || {}, latestAnomalySummary);
+      if (!list) return;
+      if (!wasteEvents.length) {
+        setPillState("wasteStatus", "Stable", "excellent");
+        list.innerHTML = "<div class=\"wasteItem\"><div class=\"wasteTitle\">Aucun gaspillage critique détecté</div><div class=\"wasteDetail\">Les dernières mesures n'indiquent ni perte immédiate ni dérive énergétique majeure.</div></div>";
+        return;
+      }
+
+      const criticalCount = wasteEvents.filter((event) => event.tone === "critical").length;
+      const tone = criticalCount > 0 ? "critical" : "watch";
+      setPillState("wasteStatus", criticalCount > 0 ? `${criticalCount} prioritaire(s)` : `${wasteEvents.length} signalement(s)`, tone);
+      list.innerHTML = wasteEvents.map((event) => `<div class="wasteItem ${event.tone}"><div class="wasteTitle">${event.title}</div><div class="wasteDetail">${event.detail}</div></div>`).join("");
+    }
+
+    function buildInterpretation(d = {}, prediction = latestPredictionData) {
+      if (!d || !Object.keys(d).length) {
+        return {
+          situation: "En attente de données temps réel.",
+          cause: "Le système attend les prochaines mesures pour qualifier l'état énergétique.",
+          impact: "Aucune estimation disponible tant qu'une télémétrie récente n'est pas reçue.",
+          recommendation: "Maintenir la collecte, puis relancer la prévision ou l'étude avant/après."
+        };
+      }
+
+      const wasteEvents = buildWasteEvents(d, latestAnomalySummary);
+      const power = Number(d.power_w || 0);
+      const riskLabel = prediction ? formatRiskLevel(prediction.risk_level).toLowerCase() : "en attente";
+      const action = formatAction(d.recommended_action);
+      const hasPresence = typeof d.presence !== "undefined" && d.presence !== null;
+      const presenceText = hasPresence ? (toBool(d.presence) ? "présence détectée" : "absence détectée") : "présence non remontée";
+
+      if (toBool(d.critical_temp_alert)) {
+        return {
+          situation: "Température critique détectée.",
+          cause: "Le seuil thermique critique est dépassé.",
+          impact: "Le confort est dégradé et la consommation peut augmenter rapidement si la situation dure.",
+          recommendation: action !== "Aucune" ? `${action} puis vérifier le retour en zone de confort.` : "Activer ou maintenir la ventilation et surveiller la température."
+        };
+      }
+
+      if (wasteEvents.length) {
+        const primary = wasteEvents[0];
+        let cause = "Une charge reste active hors du scénario optimal.";
+        let recommendation = "Corriger l'équipement concerné puis contrôler l'évolution de la puissance.";
+        if (primary.id === "waste_ventilation_absence") {
+          cause = `Ventilation maintenue alors que ${presenceText}.`;
+          recommendation = "Passer le ventilateur en AUTO ou OFF tant que la zone n'est pas occupée.";
+        } else if (primary.id === "waste_lighting_absence") {
+          cause = `Éclairage laissé actif alors que ${presenceText}.`;
+          recommendation = "Couper la lampe et vérifier la logique d'occupation.";
+        } else if (primary.id === "overpower") {
+          cause = "La puissance appelée dépasse le régime attendu du système.";
+          recommendation = "Réduire la charge active et isoler l'équipement le plus consommateur.";
+        } else if (primary.id === "open_window_ventilation_loss") {
+          cause = "Une perte thermique probable accompagne la ventilation.";
+          recommendation = "Fermer l'ouverture ou réduire la ventilation pour éviter une perte continue.";
+        }
+
+        return {
+          situation: primary.title,
+          cause,
+          impact: `${primary.detail} Risque actuel ${riskLabel}, puissance mesurée ${power.toFixed(0)} W.`,
+          recommendation
+        };
+      }
+
+      if (d.thermal_state === "trop_chaud") {
+        return {
+          situation: "Température trop élevée.",
+          cause: "La zone de confort thermique est dépassée.",
+          impact: "Une ventilation adaptée est nécessaire pour éviter l'inconfort et stabiliser la dépense énergétique.",
+          recommendation: action !== "Aucune" ? `${action} et suivre la baisse de température.` : "Activer ou maintenir la ventilation."
+        };
+      }
+
+      if (d.thermal_state === "trop_froid") {
+        return {
+          situation: "Température trop basse.",
+          cause: "La zone thermique est en dessous du niveau de confort visé.",
+          impact: "Le confort est dégradé et une action corrective peut être nécessaire selon l'usage de la zone.",
+          recommendation: action !== "Aucune" ? `${action} puis contrôler la stabilité thermique.` : "Signaler un besoin de chauffage ou d'isolation."
+        };
+      }
+
+      return {
+        situation: "Fonctionnement globalement stable.",
+        cause: `Etat thermique ${formatThermalState(d.thermal_state)} avec ${presenceText}.`,
+        impact: `Puissance instantanée ${power.toFixed(0)} W, niveau de risque ${riskLabel} et aucune anomalie majeure immédiate.`,
+        recommendation: action !== "Aucune" ? `${action} puis conserver la surveillance temps réel.` : "Maintenir le pilotage actuel et poursuivre le suivi énergétique."
+      };
+    }
+
+    function renderInterpretation() {
+      const interpretation = buildInterpretation(lastData || {}, latestPredictionData);
+      document.getElementById("insightSituation").textContent = interpretation.situation;
+      document.getElementById("insightCause").textContent = interpretation.cause;
+      document.getElementById("insightImpact").textContent = interpretation.impact;
+      document.getElementById("insightRecommendation").textContent = interpretation.recommendation;
+    }
+
+    function buildReliabilityState(d = lastData) {
+      if (!d) {
+        return {
+          score: 0,
+          label: "Faible",
+          tone: "critical",
+          summary: "Aucune donnée récente disponible pour juger la fraîcheur, la fréquence ou la cohérence des mesures.",
+          checks: { fresh: false, frequency: false, temp: false, power: false, coherence: false }
+        };
+      }
+
+      const ts = Number(d.ts || 0);
+      const age = ts > 0 ? Math.max(0, Math.floor(Date.now() / 1000) - ts) : 9999;
+      const temp = Number(d.temp_c);
+      const power = Number(d.power_w);
+      const energy = Number(d.energy_total_kwh);
+      const cost = Number(d.cost_mad);
+      const checks = {
+        fresh: age <= 15,
+        frequency: historyHealth.count >= 10 && historyHealth.stable,
+        temp: Number.isFinite(temp),
+        power: Number.isFinite(power),
+        coherence: Number.isFinite(temp) && temp >= -20 && temp <= 80 && Number.isFinite(power) && power >= 0 && Number.isFinite(energy) && energy >= 0 && Number.isFinite(cost) && cost >= 0
+      };
+
+      const passed = Object.values(checks).filter(Boolean).length;
+      const score = Math.round((passed / 5) * 100);
+      const tone = score >= 90 ? "excellent" : score >= 70 ? "correct" : score >= 50 ? "watch" : "critical";
+      const label = score >= 90 ? "Fiable" : score >= 70 ? "Correcte" : score >= 50 ? "À confirmer" : "Faible";
+      const summaryParts = [];
+      if (checks.fresh) summaryParts.push("données récentes");
+      if (checks.frequency) summaryParts.push("fréquence stable");
+      if (checks.temp && checks.power) summaryParts.push("capteurs actifs");
+      if (checks.coherence) summaryParts.push("valeurs cohérentes");
+
+      return {
+        score,
+        label,
+        tone,
+        summary: summaryParts.length ? `${summaryParts.join(", ")}.` : "Plusieurs critères de fiabilité restent à confirmer.",
+        checks
+      };
+    }
+
+    function renderReliability() {
+      const reliability = buildReliabilityState(lastData);
+      document.getElementById("reliabilityValue").textContent = reliability.score.toFixed(0);
+      setPillState("reliabilityStatus", reliability.label, reliability.tone);
+      document.getElementById("reliabilitySummary").textContent = reliability.summary;
+      setCheckState("reliabilityFresh", reliability.checks.fresh, "Récentes", "Anciennes");
+      setCheckState("reliabilityFrequency", reliability.checks.frequency, "Stable", "Instable");
+      setCheckState("reliabilityTemp", reliability.checks.temp, "Active", "Absente");
+      setCheckState("reliabilityPower", reliability.checks.power, "Active", "Absente");
+      setCheckState("reliabilityCoherence", reliability.checks.coherence, "Cohérentes", "À vérifier");
+      return reliability;
+    }
+
+    function buildGlobalScoreState(d = lastData, prediction = latestPredictionData, reliability = buildReliabilityState(d)) {
+      if (!d) {
+        return { score: 0, label: "Critique", tone: "critical", analysis: "Le score global reste indisponible tant que les premières mesures n'ont pas été reçues." };
+      }
+
+      const wasteEvents = buildWasteEvents(d, latestAnomalySummary);
+      let score = Number.isFinite(Number(d.comfort_score)) ? Number(d.comfort_score) : 70;
+      score += d.thermal_state === "confort" ? 6 : -4;
+      score -= wasteEvents.length * 8;
+      if (toBool(d.critical_temp_alert)) score -= 12;
+      if (prediction && prediction.risk_level === "warning") score -= 8;
+      if (prediction && prediction.risk_level === "critical") score -= 16;
+      if (reliability.score < 80) score -= 8;
+      score = clampNumber(Math.round(score), 0, 100);
+
+      const tone = score >= 85 ? "excellent" : score >= 70 ? "correct" : score >= 50 ? "watch" : "critical";
+      const label = score >= 85 ? "Excellent" : score >= 70 ? "Correct" : score >= 50 ? "À surveiller" : "Critique";
+      let analysis = "Température maîtrisée, données fiables et consommation cohérente.";
+      if (wasteEvents.length) analysis = `${wasteEvents[0].title}. ${wasteEvents[0].detail}`;
+      else if (d.thermal_state === "trop_chaud") analysis = "Température élevée, mais la situation reste récupérable avec une ventilation adaptée.";
+      else if (d.thermal_state === "trop_froid") analysis = "Température basse, avec un besoin de correction thermique à surveiller.";
+      else if (prediction && prediction.risk_level === "warning") analysis = "Prévision sous surveillance malgré des mesures globalement stables.";
+
+      return { score, label, tone, analysis };
+    }
+
+    function renderGlobalScore() {
+      const reliability = renderReliability();
+      const globalScore = buildGlobalScoreState(lastData, latestPredictionData, reliability);
+      document.getElementById("globalScoreValue").textContent = globalScore.score.toFixed(0);
+      setPillState("globalScoreStatus", globalScore.label, globalScore.tone);
+      document.getElementById("globalScoreAnalysis").textContent = globalScore.analysis;
+    }
+
+    function renderFinanceProjection() {
+      if (!lastData) {
+        document.getElementById("financeSituation").textContent = "Collecte temps réel en attente";
+        document.getElementById("financeProjectionStatus").textContent = "Prévision 24h en attente";
+        document.getElementById("financePredEnergy24").textContent = "--";
+        document.getElementById("financePredCost24").textContent = "--";
+        document.getElementById("financePredMonthly").textContent = "--";
+        return;
+      }
+
+      const currentPower = Number(lastData.power_w || 0).toFixed(0);
+      const currentScore = Number(lastData.comfort_score || 0).toFixed(0);
+      document.getElementById("financeSituation").textContent = `Puissance actuelle ${currentPower} W, score instantané ${currentScore}/100.`;
+
+      if (latestPredictionData && typeof latestPredictionData.predicted_kwh_24h !== "undefined") {
+        const predictedEnergy24 = Number(latestPredictionData.predicted_kwh_24h || 0);
+        const predictedCost24 = Number(latestPredictionData.predicted_cost_24h || 0);
+        document.getElementById("financePredEnergy24").textContent = predictedEnergy24.toFixed(4);
+        document.getElementById("financePredCost24").textContent = predictedCost24.toFixed(4);
+        document.getElementById("financePredMonthly").textContent = (predictedCost24 * 30).toFixed(2);
+        document.getElementById("financeProjectionStatus").textContent = `Projection basée sur la moyenne récente, risque ${formatRiskLevel(latestPredictionData.risk_level).toLowerCase()}.`;
+      } else {
+        document.getElementById("financePredEnergy24").textContent = "--";
+        document.getElementById("financePredCost24").textContent = "--";
+        document.getElementById("financePredMonthly").textContent = "--";
+        document.getElementById("financeProjectionStatus").textContent = "Prévision 24h en attente";
+      }
+    }
+
+    function refreshInsightPanels() {
+      renderInterpretation();
+      renderWastePanel();
+      renderGlobalScore();
+      renderFinanceProjection();
+    }
+
+    function ensureRealtimeChart() {
+      if (chart) return chart;
+      const ctx = document.getElementById("chart").getContext("2d");
+      chart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: "Puissance (W)",
+              data: [],
+              borderColor: "#49a8ff",
+              backgroundColor: "rgba(73,168,255,.13)",
+              fill: true,
+              tension: .25,
+              pointRadius: 1.5,
+              borderWidth: 2,
+              yAxisID: "y"
+            },
+            {
+              label: "Température (C)",
+              data: [],
+              borderColor: "#ffaf3f",
+              backgroundColor: "rgba(255,175,63,.08)",
+              fill: false,
+              tension: .25,
+              pointRadius: 1.2,
+              borderWidth: 2,
+              yAxisID: "y1"
+            }
+          ]
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: "#9fc7eb" } } },
+          scales: {
+            x: { ticks: { color: "#8fb3d6", maxTicksLimit: 8 }, grid: { color: "rgba(90,130,170,.16)" } },
+            y: {
+              position: "left",
+              ticks: { color: "#8fb3d6" },
+              title: { display: true, text: "W", color: "#49a8ff" },
+              grid: { color: "rgba(90,130,170,.16)" }
+            },
+            y1: {
+              position: "right",
+              ticks: { color: "#ffaf3f" },
+              title: { display: true, text: "C", color: "#ffaf3f" },
+              grid: { drawOnChartArea: false }
+            }
+          }
+        }
+      });
+      return chart;
+    }
+
+    function updateRealtimeChart(labels, powerValues, tempValues = []) {
+      const activeChart = ensureRealtimeChart();
+      activeChart.data.labels = labels;
+      activeChart.data.datasets[0].data = powerValues;
+      activeChart.data.datasets[1].data = Array.isArray(tempValues) && tempValues.length ? tempValues : labels.map(() => null);
+      chart.update("none");
+    }
+
+    async function fetchHistory() {
+      try {
+        const historyResponse = await fetchJSON(`/api/history?device_id=${DEVICE_ID}&limit=100`);
+        const items = historyResponse.data && Array.isArray(historyResponse.data.items) ? [...historyResponse.data.items].reverse() : [];
+        if (historyResponse.status === 200 && items.length > 0) {
+          const gaps = [];
+          for (let index = 1; index < items.length; index += 1) {
+            const gap = Number(items[index].ts || 0) - Number(items[index - 1].ts || 0);
+            if (gap > 0) gaps.push(gap);
+          }
+          const avgGapSeconds = gaps.length ? gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length : null;
+          historyHealth = { count: items.length, stable: avgGapSeconds !== null ? avgGapSeconds <= 30 : items.length >= 10, avgGapSeconds };
+          const labels = items.map((item) => new Date(Number(item.ts) * 1000).toLocaleTimeString());
+          const powerValues = items.map((item) => Number(item.power_w || 0));
+          const tempValues = items.map((item) => item.temp_c === null || typeof item.temp_c === "undefined" ? null : Number(item.temp_c));
+          updateRealtimeChart(labels, powerValues, tempValues);
+          return true;
+        }
+
+        const r = await fetch(`/api/series?device_id=${DEVICE_ID}&metric=power_w&minutes=60`);
+        const j = await r.json();
+        const pts = Array.isArray(j.points) ? j.points : [];
+        historyHealth = { count: pts.length, stable: pts.length >= 10, avgGapSeconds: null };
+        const labels = pts.map((p) => new Date(Number(p.ts) * 1000).toLocaleTimeString());
+        const vals = pts.map((p) => Number(p.v || 0));
+        updateRealtimeChart(labels, vals);
+        return true;
+      } catch (e) {
+        console.error("fetchHistory", e);
+        return false;
+      }
+    }
+
+    async function loadDailyScores(days = selectedDays) {
+      try {
+        const r = await fetch(`/api/daily_scores?device_id=${DEVICE_ID}&days=${days}`), j = await r.json();
+        if (!j.ok || !j.data || !Array.isArray(j.data.labels)) return;
+        const ctx = document.getElementById("dailyScoresChart").getContext("2d");
+        if (dailyScoresChart) dailyScoresChart.destroy();
+        dailyScoresChart = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: j.data.labels,
+            datasets: [
+              { label: "Score", data: (j.data.scores || []).map((v) => Number(v || 0)), borderColor: "#ffd15b", backgroundColor: "rgba(255,209,91,.12)", yAxisID: "y", borderWidth: 2, tension: .25 },
+              { label: "Energie (kWh)", data: (j.data.energy || []).map((v) => Number(v || 0)), borderColor: "#49a8ff", backgroundColor: "rgba(73,168,255,.12)", yAxisID: "y1", borderWidth: 2, tension: .25 }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: "#9fc7eb" } } },
+            scales: {
+              x: { ticks: { color: "#8fb3d6" }, grid: { color: "rgba(90,130,170,.16)" } },
+              y: { position: "left", ticks: { color: "#ffd15b" }, title: { display: true, text: "Score", color: "#ffd15b" }, grid: { color: "rgba(90,130,170,.16)" } },
+              y1: { position: "right", ticks: { color: "#49a8ff" }, title: { display: true, text: "kWh", color: "#49a8ff" }, grid: { drawOnChartArea: false } }
+            }
+          }
+        });
+      } catch (e) { console.error("loadDailyScores", e); }
+    }
+
+    function setDays(days) {
+      selectedDays = days;
+      document.getElementById("day7").classList.toggle("active", days === 7);
+      document.getElementById("day14").classList.toggle("active", days === 14);
+      document.getElementById("day30").classList.toggle("active", days === 30);
+      loadDailyScores(days);
+      showToast(`Affichage ${days} jours`);
+    }
+
+    async function fetchLatest() {
+      try {
+        const response = await fetchJSON(`/api/latest?device_id=${DEVICE_ID}`);
+        if (response.status === 200 && response.data && response.data.data) {
+          lastData = response.data.data;
+          return true;
+        }
+      } catch (e) {
+        console.error("fetchLatest", e);
+      }
+      return false;
+    }
+
+    async function fetchPrediction() {
+      try {
+        const response = await fetchJSON(`/api/prediction?device_id=${DEVICE_ID}`);
+        if (response.status === 200 && response.data && typeof response.data.avg_power_w !== "undefined") {
+          latestPredictionData = response.data;
+          return true;
+        }
+      } catch (e) {
+        console.error("fetchPrediction", e);
+      }
+      return false;
+    }
+
+    async function updateDashboard() {
+      if (updateInFlight) return;
+      updateInFlight = true;
+      updateClock();
+      let latestOk = false;
+      let predictionOk = false;
+
+      try {
+        [latestOk, predictionOk] = await Promise.all([fetchLatest(), fetchPrediction()]);
+        if (dashboardTick % 5 === 0) await fetchHistory();
+        setConnectionBadge(latestOk && predictionOk);
+        updateUI();
+        if (!latestOk && !lastData) setLiveBadge(false, 9999);
+        if (!predictionOk && latestPredictionData) {
+          document.getElementById("iaInfo").textContent = "Prévision conservée, connexion instable";
+        } else if (!predictionOk && !latestPredictionData) {
+          document.getElementById("iaInfo").textContent = "Collecte de données pour prévision...";
+        }
+      } finally {
+        dashboardTick += 1;
+        updateInFlight = false;
+      }
+    }
+
+    async function cmd(command) {
+      if (isCommandRateLimited(command)) return;
+      setCommandStatus(`Envoi ${command}...`);
+      const r = await fetchJSON("/api/cmd", { method: "POST", body: { device_id: DEVICE_ID, command, payload: {} } });
+      if (r.status === 200 && r.data && r.data.ok) { setCommandStatus(`OK ${command}`); showToast(`OK ${command}`); }
+      else { const msg = r.data && r.data.error ? r.data.error : r.status; setCommandStatus(`ECHEC ${command}: ${msg}`, true); showToast(`Echec ${command}`, "error"); }
+    }
+
+    async function setPeriod() {
+      const p = parseInt(document.getElementById("period").value, 10) || 2000;
+      if (p < 1000 || p > 30000) { showToast("Periode invalide (1000..30000)", "error"); return; }
+      if (isCommandRateLimited("set_period")) return;
+      setCommandStatus(`set_period ${p}...`);
+      const r = await fetchJSON("/api/cmd", { method: "POST", body: { device_id: DEVICE_ID, command: "set_period", payload: { period_ms: p } } });
+      if (r.status === 200 && r.data && r.data.ok) { setCommandStatus(`OK set_period ${p}ms`); showToast(`Periode envoyee: ${p} ms`); }
+      else { const msg = r.data && r.data.error ? r.data.error : r.status; setCommandStatus(`ECHEC set_period: ${msg}`, true); }
+    }
+
+    async function setPrice() {
+      const price = parseFloat(document.getElementById("newPrice").value);
+      if (Number.isNaN(price) || price <= 0) { showToast("Prix invalide", "error"); return; }
+      if (isCommandRateLimited("set_price")) return;
+      setCommandStatus(`set_price ${price.toFixed(2)}...`);
+      const r = await fetchJSON("/api/cmd", { method: "POST", body: { device_id: DEVICE_ID, command: "set_price", payload: { price } } });
+      if (r.status === 200 && r.data && r.data.ok) {
+        const backendPrice = Number((r.data.backend && r.data.backend.price_per_kwh) || price);
+        updateFinancePrice(backendPrice);
+        setCommandStatus(`OK set_price ${backendPrice.toFixed(2)}`);
+        showToast(`Prix backend: ${backendPrice.toFixed(2)} MAD`);
+      }
+      else { const msg = r.data && r.data.error ? r.data.error : r.status; setCommandStatus(`ECHEC set_price: ${msg}`, true); }
+    }
+
+    async function resetStudyAudit() {
+      if (isCommandRateLimited("reset_study", 800)) return;
+      setCommandStatus("Réinitialisation audit...");
+      const r = await fetchJSON("/api/cmd", { method: "POST", body: { device_id: DEVICE_ID, command: "reset_study", payload: {} } });
+      if (r.status === 200 && r.data && r.data.ok) {
+        setCommandStatus("OK reset_study");
+        setStudyPhaseStatus("idle");
+        showToast("Audit réinitialisé");
+        await refreshStudyResult();
+      } else {
+        const msg = r.data && r.data.error ? r.data.error : r.status;
+        setCommandStatus(`ECHEC reset_study: ${msg}`, true);
+        showToast("Echec reset audit", "error");
+      }
+    }
+
+    async function postStudyAction(path, label) {
+      setCommandStatus(`${label}...`);
+      const r = await fetchJSON(path, { method: "POST", body: {} });
+      if (r.status === 200) {
+        setCommandStatus(`OK ${label}`);
+        if (r.data && r.data.phase) setStudyPhaseStatus(r.data.phase);
+        showToast(label);
+        await refreshStudyResult();
+        return true;
+      } else {
+        const msg = r.data && r.data.error ? r.data.error : r.status;
+        setCommandStatus(`ECHEC ${label}: ${msg}`, true);
+        showToast(`Echec ${label}`, "error");
+        return false;
+      }
+    }
+
+    async function startBeforeStudy() {
+      if (await postStudyAction("/api/study/start_before", "Démarrage AVANT")) setStudyPhaseStatus("recording_before");
+    }
+    async function stopBeforeStudy() {
+      if (await postStudyAction("/api/study/stop_before", "Stop AVANT")) setStudyPhaseStatus("idle");
+    }
+    async function startAfterStudy() {
+      if (await postStudyAction("/api/study/start_after", "Démarrage APRÈS")) setStudyPhaseStatus("recording_after");
+    }
+    async function stopAfterStudy() {
+      if (await postStudyAction("/api/study/stop_after", "Stop APRÈS")) setStudyPhaseStatus("idle");
+    }
+
+    async function refreshStudyResult() {
+      try {
+        const r = await fetchJSON(`/api/study/result?device_id=${DEVICE_ID}`), j = r.data;
+        if (r.status === 200 && j && typeof j.before_kwh !== "undefined") {
+          updateStudyResult(j);
+        } else {
+          const msg = j && j.error ? j.error : r.status;
+          setCommandStatus(`study/result error: ${msg}`, true);
+        }
+      } catch (e) { console.error("refreshStudyResult", e); }
+    }
+
+    async function loadDailyReports() {
+      const c = document.getElementById("dailyReportsContainer"), list = document.getElementById("dailyReportsList");
+      if (c.style.display === "block") { c.style.display = "none"; return; }
+      c.style.display = "block"; list.innerHTML = "Chargement...";
+      try {
+        const r = await fetchJSON(`/api/daily_reports?device_id=${DEVICE_ID}&limit=6`), j = r.data;
+        if (j && j.ok && Array.isArray(j.reports) && j.reports.length > 0) {
+          list.innerHTML = j.reports.map((rep) => { const d = rep.ts ? new Date(Number(rep.ts) * 1000).toLocaleDateString() : (rep.date || "--"); const s = Number(rep.daily_avg_score || 0); const sc = s >= 80 ? "#4eff9f" : (s >= 60 ? "#ffd15b" : "#ff8f95"); return `<div class="report"><div class="rh"><span>${d}</span><span style="color:${sc};font-weight:700;">${s.toFixed(1)}</span></div><div class="rg"><div>Energie: ${Number(rep.daily_energy_kwh || 0).toFixed(2)} kWh</div><div>Cout: ${Number(rep.daily_cost_mad || 0).toFixed(2)} MAD</div></div></div>`; }).join("");
+        } else if (j && !j.ok) list.innerHTML = `<div style="color:#ffbcc0;">Erreur: ${j.error || "serveur"}</div>`;
+        else list.innerHTML = "<div style='color:#9ec2e3;'>Aucun rapport quotidien.</div>";
+      } catch (e) { list.innerHTML = "<div style='color:#ffbcc0;'>Erreur chargement rapports.</div>"; console.error("loadDailyReports", e); }
+    }
+
+    async function requestDailyReportNow() {
+      if (isCommandRateLimited("daily_report_now", 800)) return;
+      setCommandStatus("Demande daily_report_now...");
+      const r = await fetchJSON("/api/cmd", { method: "POST", body: { device_id: DEVICE_ID, command: "daily_report_now", payload: {} } });
+      if (r.status === 200 && r.data && r.data.ok) { setCommandStatus("OK daily_report_now"); showToast("Daily report now envoye"); setTimeout(loadDailyReports, 3500); }
+      else { const msg = r.data && r.data.error ? r.data.error : r.status; setCommandStatus(`ECHEC daily_report_now: ${msg}`, true); }
+    }
+
+    async function predict() {
+      const ok = await fetchPrediction();
+      if (ok) {
+        updateUI();
+        setConnectionBadge(true);
+        showToast("Prévision actualisée");
+      } else {
+        document.getElementById("iaInfo").textContent = latestPredictionData ? "Prévision conservée, connexion instable" : "Collecte de données pour prévision...";
+        setConnectionBadge(false);
+        showToast("Échec actualisation prévision", "error");
+      }
+    }
+
+    async function anom(showToastPopup = false) {
+      try {
+        const r = await fetch(`/api/ai/anomaly_summary?device_id=${DEVICE_ID}&minutes=60`), j = await r.json();
+        if (j && j.anomalies) {
+          latestAnomalySummary = { ...j.anomalies, minutes: Number(j.minutes || 60) };
+          renderAnomalySummary(latestAnomalySummary);
+          refreshInsightPanels();
+          if (showToastPopup) showToast(`${Number(j.anomalies.total || 0).toFixed(0)} anomalie(s) active(s)`);
+        }
+      } catch (e) { console.error("anom", e); }
+    }
+
+    updateClock();
+    setStudyPhaseStatus("idle");
+    loadComfortProfile();
+    loadDailyScores(selectedDays);
+    refreshStudyResult();
+    anom(false);
+    updateDashboard();
+    window.timer = setInterval(updateDashboard, 1000);
+  </script>
+</body>
+</html>

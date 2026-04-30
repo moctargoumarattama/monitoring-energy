@@ -1,0 +1,17 @@
+Non, ce n’est pas exactement la même chose.
+
+`70` correspond au score brut du relevé temps réel, affiché directement depuis `d.comfort_score` dans [templates/index.html](</C:/Users/hp/Desktop/monitoring energy/templates/index.html:747>). Ce score est calculé côté backend dans [energy_rules.py](</C:/Users/hp/Desktop/monitoring energy/energy_rules.py:112>) à partir des règles de confort, température critique, anomalies et capteur.
+
+`58` correspond au score global recalculé dans le navigateur dans [templates/index.html](</C:/Users/hp/Desktop/monitoring energy/templates/index.html:994>). Il repart de `comfort_score`, puis ajoute ou retire des points selon le contexte.
+
+Pour ta donnée actuelle, le calcul est bien:
+- `70` = score brut enregistré
+- `-4` parce que `thermal_state = "trop_froid"` dans [templates/index.html](</C:/Users/hp/Desktop/monitoring energy/templates/index.html:995>)
+- `-8` parce qu’un événement `sensor_check` est détecté, donc 1 anomalie comptée dans [templates/index.html](</C:/Users/hp/Desktop/monitoring energy/templates/index.html:822>) puis pénalisée dans [templates/index.html](</C:/Users/hp/Desktop/monitoring energy/templates/index.html:996>)
+- total = `58`
+
+Le `80 %` de fiabilité est encore un 3e indicateur séparé, basé sur 5 contrôles de fraîcheur/fréquence/cohérence dans [templates/index.html](</C:/Users/hp/Desktop/monitoring energy/templates/index.html:948>).
+
+Le vrai problème ici, c’est surtout le libellé: l’interface peut faire croire que `70` et `58` sont le même score. Si tu veux, je peux te modifier la page pour renommer clairement:
+- `Score énergétique` → `Score instantané`
+- `Score énergétique global` → `Score interprété global`
