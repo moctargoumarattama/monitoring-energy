@@ -1,0 +1,997 @@
+#include <Arduino.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <DHT.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// ============================================================
+// CONFIGURATION RESEAU
+// ============================================================
+const char* WIFI_SSID = "La_Fibre_dOrange_2.4G_CC8B";
+const char* WIFI_PASSWORD = "SDQFHR9EYZQPGYFEY6";
+
+// Change only this line to switch between local and production.
+constexpr bool USE_PRODUCTION_SERVER = true;
+
+const char* LOCAL_SERVER_BASE = "http://192.168.11.102:5000";
+const char* PRODUCTION_SERVER_BASE = "https://labeeb-forlife.pythonanywhere.com";
+
+const char* API_TOKEN = "esp32_maison_2024";
+const char* DEVICE_ID = "esp32-1";
+
+// ============================================================
+// AFFECTATION DES BROCHES ESP32 (SANS RELAIS)
+// ============================================================
+constexpr uint8_t DHT_PIN          = 14;  // DHT11
+constexpr uint8_t PIR_PIN          = 27;  // PIR HC-SR501
+constexpr uint8_t POT_PIN          = 34;  // Potentiometre
+constexpr uint8_t LED_LAMP_PIN     = 23;  // LED Verte (Lampe ON)
+constexpr uint8_t LED_FAN_PIN      = 19;  // LED Rouge #1 (Ventilo ON)
+constexpr uint8_t LED_ALERT_PIN    = 18;  // LED Rouge #2 (Alerte)
+constexpr uint8_t LED_CRITICAL_PIN = 33;  // LED Rouge #3 (Critique)
+constexpr uint8_t BUZZER_PIN       = 5;   // Buzzer
+constexpr uint8_t LCD_SDA_PIN      = 21;  // LCD I2C SDA
+constexpr uint8_t LCD_SCL_PIN      = 22;  // LCD I2C SCL
+
+// ============================================================
+// CONFIG LCD I2C
+// ============================================================
+constexpr uint8_t LCD_I2C_ADDRESS = 0x27;
+constexpr uint8_t LCD_COLS = 16;
+constexpr uint8_t LCD_ROWS = 2;
+LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
+WiFiClientSecure secureClient;
+
+const char* getServerBase() {
+  return USE_PRODUCTION_SERVER ? PRODUCTION_SERVER_BASE : LOCAL_SERVER_BASE;
+}
+
+bool useSecureTransport() {
+  return USE_PRODUCTION_SERVER;
+}
+
+void beginApiRequest(HTTPClient& http, const String& url) {
+  if (useSecureTransport()) {
+    http.begin(secureClient, url);
+  } else {
+    http.begin(url);
+  }
+}
+
+// ============================================================
+// PARAMETRES GENERAUX
+// ============================================================
+constexpr bool BUZZER_ACTIVE_HIGH = true;
+
+constexpr unsigned long WIFI_RECONNECT_INTERVAL_MS = 10000UL;
+constexpr unsigned long DEFAULT_SEND_PERIOD_MS = 1500UL;
+constexpr unsigned long MIN_SEND_PERIOD_MS = 1000UL;
+constexpr unsigned long MAX_SEND_PERIOD_MS = 60000UL;
+constexpr unsigned long HTTP_TIMEOUT_MS = 4000UL;
+constexpr unsigned long DHT_SAMPLE_INTERVAL_MS = 1500UL;
+constexpr unsigned long PIR_EDGE_DEBOUNCE_MS = 150UL;
+
+constexpr unsigned long LCD_SCREEN_DURATION_MS = 3000UL;
+constexpr unsigned long LCD_REFRESH_MS = 500UL;
+
+constexpr unsigned long PIR_CALIBRATION_MS = 20000UL;
+
+constexpr unsigned long BUZZER_BEEP_ON_MS = 200UL;
+constexpr unsigned long BUZZER_BEEP_OFF_MS = 800UL;
+constexpr unsigned long BUZZER_CRITICAL_ON_MS = 100UL;
+constexpr unsigned long BUZZER_CRITICAL_OFF_MS = 200UL;
+
+constexpr float MAX_SIMULATED_POWER_W = 3000.0f;
+constexpr float VOLTAGE_REFERENCE_V   = 220.0f;
+constexpr float PRICE_PER_KWH_MAD     = 1.2f;
+
+constexpr float CRITICAL_POWER_W = 2500.0f;
+constexpr float CRITICAL_TEMP_C  = 30.0f;
+
+constexpr uint8_t WINDOW_SENSOR_PIN = 32;  // Contact fenetre / reed switch
+constexpr bool WINDOW_SENSOR_OPEN_LEVEL = HIGH;
+
+DHT dht(DHT_PIN, DHT11);
+
+// ============================================================
+// STRUCTURES
+// ============================================================
+struct TelemetrySnapshot {
+  bool presence;
+  bool windowOpen;
+  bool tempOk;
+  float tempC;
+  float humidity;
+  float currentA;
+  float powerW;
+  float energyTotalKwh;
+  float costMad;
+  bool lampOn;
+  bool fanOn;
+  bool anomalyDhtFail;
+  int alerts;
+  bool remoteEnabled;
+  bool generalAlert;
+  bool criticalAlert;
+};
+
+// ============================================================
+// VARIABLES GLOBALES
+// ============================================================
+bool lampState = false;
+bool fanState = false;
+bool fanAutoMode = false;
+bool remoteEnabled = true;
+bool restartRequested = false;
+String restartReason;
+bool windowManualOverride = false;
+bool windowManualOpenState = false;
+
+unsigned long sendPeriodMs = DEFAULT_SEND_PERIOD_MS;
+unsigned long lastCycleMs = 0;
+unsigned long lastWiFiReconnectAttemptMs = 0;
+
+float energyAccumulatorKwh = 0.0f;
+unsigned long lastEnergyUpdateMs = 0;
+bool windowSensorInitialized = false;
+bool lastWindowSensorState = false;
+unsigned long lastWindowSensorChangeMs = 0;
+float cachedTempC = 0.0f;
+float cachedHumidity = 0.0f;
+bool cachedTempOk = false;
+unsigned long lastDhtSampleMs = 0;
+bool pirStateInitialized = false;
+bool lastPirState = false;
+unsigned long lastPirEdgeMs = 0;
+
+TelemetrySnapshot lastSnapshot{};
+bool snapshotReady = false;
+
+int currentLcdScreen = 0;
+unsigned long lastLcdSwitchMs = 0;
+unsigned long lastLcdRefreshMs = 0;
+
+bool buzzerActive = false;
+bool buzzerOn = false;
+unsigned long lastBuzzerToggleMs = 0;
+
+void sendTelemetry();
+
+// ============================================================
+// UTILITAIRES
+// ============================================================
+const char* boolToJson(bool value) {
+  return value ? "true" : "false";
+}
+
+void logInfo(const char* scope, const String& message) {
+  Serial.print("[");
+  Serial.print(scope);
+  Serial.print("] ");
+  Serial.println(message);
+}
+
+void writeControlledOutput(uint8_t pin, bool enabled, bool activeHigh) {
+  digitalWrite(pin, (enabled == activeHigh) ? HIGH : LOW);
+}
+
+// ============================================================
+// AFFICHAGE LCD
+// ============================================================
+void lcdShowBoot(const String& message) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Smart Energy");
+  lcd.setCursor(0, 1);
+  String m = message.substring(0, LCD_COLS);
+  lcd.print(m);
+}
+
+void lcdShowCalibration(int secondsLeft) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Calibration PIR");
+  lcd.setCursor(0, 1);
+  lcd.print("Patientez ");
+  lcd.print(secondsLeft);
+  lcd.print("s   ");
+}
+
+void lcdPadAndPrint(const String& text) {
+  String t = text;
+  while (t.length() < LCD_COLS) t += ' ';
+  if (t.length() > LCD_COLS) t = t.substring(0, LCD_COLS);
+  lcd.print(t);
+}
+
+void lcdScreenEnvironment(const TelemetrySnapshot& s) {
+  lcd.setCursor(0, 0);
+  String line1 = "T:";
+  if (s.tempOk) {
+    line1 += String(s.tempC, 1);
+    line1 += "C ";
+  } else {
+    line1 += "ERR  ";
+  }
+  line1 += "H:";
+  line1 += String((int)s.humidity);
+  line1 += "%";
+  lcdPadAndPrint(line1);
+  
+  lcd.setCursor(0, 1);
+  String line2 = "Presence:";
+  line2 += s.presence ? "OUI" : "NON";
+  lcdPadAndPrint(line2);
+}
+
+void lcdScreenEnergy(const TelemetrySnapshot& s) {
+  lcd.setCursor(0, 0);
+  String line1 = "P:";
+  line1 += String((int)s.powerW);
+  line1 += "W I:";
+  line1 += String(s.currentA, 1);
+  line1 += "A";
+  lcdPadAndPrint(line1);
+  
+  lcd.setCursor(0, 1);
+  String line2 = "E:";
+  line2 += String(s.energyTotalKwh, 3);
+  line2 += "kWh";
+  lcdPadAndPrint(line2);
+}
+
+void lcdScreenActuators(const TelemetrySnapshot& s) {
+  lcd.setCursor(0, 0);
+  String line1 = "Lampe:";
+  line1 += s.lampOn ? "ON " : "OFF";
+  line1 += " V:";
+  line1 += s.fanOn ? "ON" : "OFF";
+  lcdPadAndPrint(line1);
+  
+  lcd.setCursor(0, 1);
+  String line2 = "Mode:";
+  line2 += fanAutoMode ? "AUTO" : "MAN ";
+  line2 += " Alr:";
+  line2 += String(s.alerts);
+  lcdPadAndPrint(line2);
+}
+
+void lcdScreenNetwork(const TelemetrySnapshot& s) {
+  lcd.setCursor(0, 0);
+  String line1 = "WiFi:";
+  if (WiFi.status() == WL_CONNECTED) {
+    line1 += "OK ";
+    line1 += String(WiFi.RSSI());
+    line1 += "dB";
+  } else {
+    line1 += "DECONNECTE";
+  }
+  lcdPadAndPrint(line1);
+  
+  lcd.setCursor(0, 1);
+  String line2 = "Cout:";
+  line2 += String(s.costMad, 3);
+  line2 += "MAD";
+  lcdPadAndPrint(line2);
+}
+
+void lcdScreenAlert(const TelemetrySnapshot& s) {
+  lcd.setCursor(0, 0);
+  if (s.criticalAlert) {
+    lcdPadAndPrint("!! ALERTE !!");
+    lcd.setCursor(0, 1);
+    if (s.tempC > CRITICAL_TEMP_C) {
+      lcdPadAndPrint("Surchauffe!");
+    } else if (s.powerW > CRITICAL_POWER_W) {
+      lcdPadAndPrint("Surpuissance!");
+    } else {
+      lcdPadAndPrint("Critique");
+    }
+  } else {
+    lcdPadAndPrint("Anomalie");
+    lcd.setCursor(0, 1);
+    if (s.anomalyDhtFail) {
+      lcdPadAndPrint("Capteur DHT KO");
+    } else {
+      lcdPadAndPrint("Voir details");
+    }
+  }
+}
+
+void updateLcdRotation() {
+  if (!snapshotReady) return;
+  
+  unsigned long now = millis();
+  
+  if (lastSnapshot.criticalAlert) {
+    if (now - lastLcdRefreshMs >= LCD_REFRESH_MS) {
+      lastLcdRefreshMs = now;
+      lcdScreenAlert(lastSnapshot);
+    }
+    return;
+  }
+  
+  if (now - lastLcdSwitchMs >= LCD_SCREEN_DURATION_MS) {
+    lastLcdSwitchMs = now;
+    currentLcdScreen = (currentLcdScreen + 1) % 4;
+    lcd.clear();
+  }
+  
+  if (now - lastLcdRefreshMs >= LCD_REFRESH_MS) {
+    lastLcdRefreshMs = now;
+    switch (currentLcdScreen) {
+      case 0: lcdScreenEnvironment(lastSnapshot); break;
+      case 1: lcdScreenEnergy(lastSnapshot); break;
+      case 2: lcdScreenActuators(lastSnapshot); break;
+      case 3: lcdScreenNetwork(lastSnapshot); break;
+    }
+  }
+}
+
+// ============================================================
+// BUZZER
+// ============================================================
+void updateBuzzer() {
+  unsigned long now = millis();
+  
+  if (!buzzerActive) {
+    if (buzzerOn) {
+      writeControlledOutput(BUZZER_PIN, false, BUZZER_ACTIVE_HIGH);
+      buzzerOn = false;
+    }
+    return;
+  }
+  
+  bool isCritical = lastSnapshot.criticalAlert;
+  unsigned long onMs = isCritical ? BUZZER_CRITICAL_ON_MS : BUZZER_BEEP_ON_MS;
+  unsigned long offMs = isCritical ? BUZZER_CRITICAL_OFF_MS : BUZZER_BEEP_OFF_MS;
+  
+  if (buzzerOn) {
+    if (now - lastBuzzerToggleMs >= onMs) {
+      writeControlledOutput(BUZZER_PIN, false, BUZZER_ACTIVE_HIGH);
+      buzzerOn = false;
+      lastBuzzerToggleMs = now;
+    }
+  } else {
+    if (now - lastBuzzerToggleMs >= offMs) {
+      writeControlledOutput(BUZZER_PIN, true, BUZZER_ACTIVE_HIGH);
+      buzzerOn = true;
+      lastBuzzerToggleMs = now;
+    }
+  }
+}
+
+void setBuzzerActive(bool active) {
+  buzzerActive = active;
+  if (!active && buzzerOn) {
+    writeControlledOutput(BUZZER_PIN, false, BUZZER_ACTIVE_HIGH);
+    buzzerOn = false;
+  }
+}
+
+// ============================================================
+// CONTROLE ACTIONNEURS (LED uniquement, SANS RELAIS)
+// ============================================================
+void setLampState(bool enabled) {
+  lampState = enabled;
+  digitalWrite(LED_LAMP_PIN, enabled ? HIGH : LOW);
+}
+
+void setFanState(bool enabled) {
+  fanState = enabled;
+  digitalWrite(LED_FAN_PIN, enabled ? HIGH : LOW);
+}
+
+void setAlertLed(bool enabled) {
+  digitalWrite(LED_ALERT_PIN, enabled ? HIGH : LOW);
+}
+
+void setCriticalLed(bool enabled) {
+  digitalWrite(LED_CRITICAL_PIN, enabled ? HIGH : LOW);
+}
+
+void resetEnergyTotals() {
+  energyAccumulatorKwh = 0.0f;
+  lastEnergyUpdateMs = millis();
+  if (snapshotReady) {
+    lastSnapshot.energyTotalKwh = 0.0f;
+    lastSnapshot.costMad = 0.0f;
+  }
+}
+
+// ============================================================
+// REDEMARRAGE
+// ============================================================
+void requestRestart(const String& reason) {
+  restartRequested = true;
+  restartReason = reason;
+}
+
+void performPendingRestart() {
+  if (!restartRequested) return;
+  logInfo("SYS", "Redemarrage: " + restartReason);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Redemarrage...");
+  delay(500);
+  ESP.restart();
+}
+
+// ============================================================
+// CONFIG PINS (SANS RELAIS)
+// ============================================================
+void configurePins() {
+  pinMode(PIR_PIN, INPUT);
+  pinMode(POT_PIN, INPUT);
+  pinMode(WINDOW_SENSOR_PIN, INPUT_PULLUP);
+  pinMode(LED_LAMP_PIN, OUTPUT);
+  pinMode(LED_FAN_PIN, OUTPUT);
+  pinMode(LED_ALERT_PIN, OUTPUT);
+  pinMode(LED_CRITICAL_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+
+  analogReadResolution(12);
+
+  setLampState(false);
+  setFanState(false);
+  setAlertLed(false);
+  setCriticalLed(false);
+  writeControlledOutput(BUZZER_PIN, false, BUZZER_ACTIVE_HIGH);
+
+  logInfo("GPIO", "Sorties initialisees (mode LED, sans relais).");
+}
+
+// ============================================================
+// LCD INIT
+// ============================================================
+void initLcd() {
+  Wire.begin(LCD_SDA_PIN, LCD_SCL_PIN);
+  lcd.init();
+  lcd.backlight();
+  lcdShowBoot("Initialisation");
+  logInfo("LCD", "LCD I2C initialise (0x27).");
+}
+
+void initSecureClient() {
+  if (useSecureTransport()) {
+    secureClient.setInsecure();
+  }
+}
+
+// ============================================================
+// CALIBRATION PIR
+// ============================================================
+void calibratePir() {
+  logInfo("PIR", "Calibration en cours (20s)...");
+  
+  unsigned long startMs = millis();
+  unsigned long lastUpdateMs = 0;
+  
+  while (millis() - startMs < PIR_CALIBRATION_MS) {
+    unsigned long now = millis();
+    if (now - lastUpdateMs >= 1000) {
+      lastUpdateMs = now;
+      int secondsLeft = (PIR_CALIBRATION_MS - (now - startMs)) / 1000 + 1;
+      lcdShowCalibration(secondsLeft);
+      digitalWrite(LED_ALERT_PIN, (secondsLeft % 2 == 0) ? HIGH : LOW);
+    }
+    delay(50);
+  }
+  
+  digitalWrite(LED_ALERT_PIN, LOW);
+  logInfo("PIR", "Calibration PIR terminee.");
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("PIR PRET !");
+  lcd.setCursor(0, 1);
+  lcd.print("Demarrage...");
+  delay(1500);
+}
+
+// ============================================================
+// WIFI
+// ============================================================
+void connectWiFiBlocking() {
+  WiFi.mode(WIFI_STA);
+  WiFi.persistent(false);
+  WiFi.setAutoReconnect(true);
+
+  logInfo("WIFI", "Connexion: " + String(WIFI_SSID));
+  lcdShowBoot("Connexion WiFi");
+  
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+    
+    if (attempts % 4 == 0) {
+      lcd.setCursor(0, 1);
+      String dots = "Tentative ";
+      dots += String(attempts / 2);
+      while (dots.length() < LCD_COLS) dots += ' ';
+      lcd.print(dots);
+    }
+  }
+  Serial.println();
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  if (WiFi.status() == WL_CONNECTED) {
+    logInfo("WIFI", "Connecte. IP: " + WiFi.localIP().toString());
+    lcd.print("WiFi OK");
+    lcd.setCursor(0, 1);
+    lcd.print(WiFi.localIP().toString());
+  } else {
+    logInfo("WIFI", "ECHEC connexion.");
+    lcd.print("WiFi ERREUR");
+    lcd.setCursor(0, 1);
+    lcd.print("Mode hors-ligne");
+  }
+  delay(2000);
+}
+
+void ensureWiFiConnection() {
+  if (WiFi.status() == WL_CONNECTED) return;
+  
+  const unsigned long now = millis();
+  if (now - lastWiFiReconnectAttemptMs < WIFI_RECONNECT_INTERVAL_MS) return;
+  
+  lastWiFiReconnectAttemptMs = now;
+  logInfo("WIFI", "Tentative reconnexion...");
+  WiFi.disconnect();
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+}
+
+// ============================================================
+// LECTURE CAPTEURS
+// ============================================================
+void sampleDhtSensors(unsigned long nowMs, bool force = false) {
+  if (!force && lastDhtSampleMs != 0 && (nowMs - lastDhtSampleMs) < DHT_SAMPLE_INTERVAL_MS) {
+    return;
+  }
+
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  cachedTempOk = !isnan(t) && !isnan(h);
+  cachedTempC = cachedTempOk ? t : 0.0f;
+  cachedHumidity = cachedTempOk ? h : 0.0f;
+  lastDhtSampleMs = nowMs;
+}
+
+bool readWindowOpen(unsigned long nowMs) {
+  if (windowManualOverride) {
+    return windowManualOpenState;
+  }
+
+  const bool rawWindowOpen = digitalRead(WINDOW_SENSOR_PIN) == WINDOW_SENSOR_OPEN_LEVEL;
+
+  if (!windowSensorInitialized) {
+    windowSensorInitialized = true;
+    lastWindowSensorState = rawWindowOpen;
+    lastWindowSensorChangeMs = nowMs;
+    return rawWindowOpen;
+  }
+
+  if (rawWindowOpen == lastWindowSensorState) {
+    return rawWindowOpen;
+  }
+
+  if ((nowMs - lastWindowSensorChangeMs) < 120UL) {
+    return lastWindowSensorState;
+  }
+
+  lastWindowSensorState = rawWindowOpen;
+  lastWindowSensorChangeMs = nowMs;
+  return rawWindowOpen;
+}
+
+void initializePirTracking() {
+  lastPirState = digitalRead(PIR_PIN) == HIGH;
+  pirStateInitialized = true;
+  lastPirEdgeMs = 0;
+}
+
+void processPirStateChange(unsigned long nowMs) {
+  const bool currentPirState = digitalRead(PIR_PIN) == HIGH;
+
+  if (!pirStateInitialized) {
+    lastPirState = currentPirState;
+    pirStateInitialized = true;
+    lastPirEdgeMs = nowMs;
+    return;
+  }
+
+  if (currentPirState == lastPirState) {
+    return;
+  }
+
+  if (lastPirEdgeMs != 0 && (nowMs - lastPirEdgeMs) < PIR_EDGE_DEBOUNCE_MS) {
+    return;
+  }
+
+  lastPirState = currentPirState;
+  lastPirEdgeMs = nowMs;
+  logInfo("PIR", currentPirState ? "Mouvement detecte - envoi immediat" : "Mouvement termine - envoi immediat");
+  sendTelemetry();
+  lastCycleMs = nowMs;
+}
+
+TelemetrySnapshot readTelemetry() {
+  TelemetrySnapshot snapshot{};
+  const unsigned long nowMs = millis();
+  sampleDhtSensors(nowMs);
+  snapshot.tempOk = cachedTempOk;
+  snapshot.tempC = snapshot.tempOk ? cachedTempC : 0.0f;
+  snapshot.humidity = snapshot.tempOk ? cachedHumidity : 0.0f;
+
+  snapshot.presence = digitalRead(PIR_PIN) == HIGH;
+  snapshot.windowOpen = readWindowOpen(nowMs);
+
+  const int rawPot = analogRead(POT_PIN);
+  const float ratio = rawPot / 4095.0f;
+  snapshot.powerW = ratio * MAX_SIMULATED_POWER_W;
+  snapshot.currentA = snapshot.powerW / VOLTAGE_REFERENCE_V;
+
+  if (lastEnergyUpdateMs > 0) {
+    const float deltaHours = (nowMs - lastEnergyUpdateMs) / 3600000.0f;
+    energyAccumulatorKwh += (snapshot.powerW / 1000.0f) * deltaHours;
+  }
+  lastEnergyUpdateMs = nowMs;
+  snapshot.energyTotalKwh = energyAccumulatorKwh;
+  snapshot.costMad = energyAccumulatorKwh * PRICE_PER_KWH_MAD;
+
+  snapshot.lampOn = lampState;
+  snapshot.fanOn = fanState;
+  snapshot.anomalyDhtFail = !snapshot.tempOk;
+  snapshot.remoteEnabled = remoteEnabled;
+
+  snapshot.criticalAlert = (snapshot.powerW > CRITICAL_POWER_W) ||
+                            (snapshot.tempC > CRITICAL_TEMP_C);
+  snapshot.generalAlert = snapshot.anomalyDhtFail || snapshot.criticalAlert;
+
+  snapshot.alerts = 0;
+  if (snapshot.anomalyDhtFail) snapshot.alerts++;
+  if (snapshot.criticalAlert) snapshot.alerts++;
+
+  setAlertLed(snapshot.generalAlert);
+  setCriticalLed(snapshot.criticalAlert);
+  setBuzzerActive(snapshot.generalAlert);
+
+  if (snapshot.tempOk) {
+    logInfo("DATA", "T=" + String(snapshot.tempC, 1) + "C H=" + 
+                    String(snapshot.humidity, 0) + "% P=" +
+                    String(snapshot.powerW, 0) + "W Pres=" +
+                    String(snapshot.presence ? "OUI" : "NON"));
+  } else {
+    logInfo("DHT", "Lecture invalide.");
+  }
+
+  lastSnapshot = snapshot;
+  snapshotReady = true;
+
+  return snapshot;
+}
+
+// ============================================================
+// JSON
+// ============================================================
+String buildTelemetryPayload(const TelemetrySnapshot& s) {
+  String payload;
+  payload.reserve(450);
+
+  payload += "{";
+  payload += "\"device_id\":\"" + String(DEVICE_ID) + "\",";
+  payload += "\"presence\":" + String(boolToJson(s.presence)) + ",";
+  payload += "\"window_open\":" + String(boolToJson(s.windowOpen)) + ",";
+  payload += "\"temp_ok\":" + String(boolToJson(s.tempOk)) + ",";
+  payload += "\"temp_c\":" + String(s.tempC, 1) + ",";
+  payload += "\"humidity\":" + String(s.humidity, 1) + ",";
+  payload += "\"current_a\":" + String(s.currentA, 2) + ",";
+  payload += "\"power_w\":" + String(s.powerW, 1) + ",";
+  payload += "\"energy_total_kwh\":" + String(s.energyTotalKwh, 4) + ",";
+  payload += "\"cost_mad\":" + String(s.costMad, 4) + ",";
+  payload += "\"lamp_on\":" + String(boolToJson(s.lampOn)) + ",";
+  payload += "\"fan_on\":" + String(boolToJson(s.fanOn)) + ",";
+  payload += "\"anomaly_dht_fail\":" + String(boolToJson(s.anomalyDhtFail)) + ",";
+  payload += "\"alerts\":" + String(s.alerts) + ",";
+  payload += "\"remote_enabled\":" + String(boolToJson(s.remoteEnabled));
+  payload += "}";
+
+  return payload;
+}
+
+// ============================================================
+// PARSING JSON
+// ============================================================
+String extractJsonString(const String& response, const char* key) {
+  // Tolere les retours a la ligne et les espaces autour de ':'.
+  const String pattern = "\"" + String(key) + "\"";
+  const int keyStart = response.indexOf(pattern);
+  if (keyStart < 0) return "";
+
+  int pos = keyStart + pattern.length();
+  while (pos < (int)response.length() && response[pos] != ':') {
+    pos++;
+  }
+  if (pos >= (int)response.length()) return "";
+  pos++;  // saute ':'
+
+  while (pos < (int)response.length() &&
+         (response[pos] == ' ' || response[pos] == '\t' ||
+          response[pos] == '\r' || response[pos] == '\n')) {
+    pos++;
+  }
+
+  if (pos >= (int)response.length() || response[pos] != '"') return "";
+  pos++;  // saute le guillemet ouvrant
+
+  const int valueEnd = response.indexOf('"', pos);
+  if (valueEnd < 0) return "";
+  return response.substring(pos, valueEnd);
+}
+
+int extractJsonInt(const String& response, const char* key, int defaultValue) {
+  // Tolere les retours a la ligne et les espaces autour de ':'.
+  const String pattern = "\"" + String(key) + "\"";
+  const int keyStart = response.indexOf(pattern);
+  if (keyStart < 0) return defaultValue;
+
+  int pos = keyStart + pattern.length();
+  while (pos < (int)response.length() && response[pos] != ':') {
+    pos++;
+  }
+  if (pos >= (int)response.length()) return defaultValue;
+  pos++;  // saute ':'
+
+  while (pos < (int)response.length() &&
+         (response[pos] == ' ' || response[pos] == '\t' ||
+          response[pos] == '\r' || response[pos] == '\n')) {
+    pos++;
+  }
+
+  bool negative = false;
+  if (pos < (int)response.length() && response[pos] == '-') {
+    negative = true;
+    pos++;
+  }
+
+  long value = 0;
+  bool hasDigit = false;
+  while (pos < (int)response.length() && isDigit(response[pos])) {
+    hasDigit = true;
+    value = (value * 10L) + (response[pos] - '0');
+    pos++;
+  }
+
+  if (!hasDigit) return defaultValue;
+  return negative ? -static_cast<int>(value) : static_cast<int>(value);
+}
+
+unsigned long sanitizeSendPeriod(int requestedPeriodMs) {
+  if (requestedPeriodMs <= 0) return sendPeriodMs;
+  unsigned long sanitized = static_cast<unsigned long>(requestedPeriodMs);
+  if (sanitized < MIN_SEND_PERIOD_MS) sanitized = MIN_SEND_PERIOD_MS;
+  if (sanitized > MAX_SEND_PERIOD_MS) sanitized = MAX_SEND_PERIOD_MS;
+  return sanitized;
+}
+
+// ============================================================
+// COMMANDES
+// ============================================================
+String handleCommand(const String& command, int requestedPeriodMs) {
+  if (command.length() == 0) return "ignored";
+  logInfo("CMD", "Recu: " + command);
+
+  if (command == "lamp_on") {
+    setLampState(true);
+    logInfo("ACT", "Lampe (LED Verte) ON");
+    return "acked";
+  }
+  else if (command == "lamp_off") {
+    setLampState(false);
+    logInfo("ACT", "Lampe (LED Verte) OFF");
+    return "acked";
+  }
+  else if (command == "fan_on") {
+    fanAutoMode = false;
+    setFanState(true);
+    logInfo("ACT", "Ventilateur (LED Rouge) ON");
+    return "acked";
+  }
+  else if (command == "fan_off") {
+    fanAutoMode = false;
+    setFanState(false);
+    logInfo("ACT", "Ventilateur (LED Rouge) OFF");
+    return "acked";
+  }
+  else if (command == "fan_auto") {
+    fanAutoMode = true;
+    logInfo("ACT", "Mode AUTO");
+    return "acked";
+  }
+  else if (command == "window_open") {
+    windowManualOverride = true;
+    windowManualOpenState = true;
+    logInfo("ACT", "Fenetre forcee OUVERTE");
+    return "acked";
+  }
+  else if (command == "window_close") {
+    windowManualOverride = true;
+    windowManualOpenState = false;
+    logInfo("ACT", "Fenetre forcee FERMEe");
+    return "acked";
+  }
+  else if (command == "set_period") {
+    if (requestedPeriodMs > 0) {
+      sendPeriodMs = sanitizeSendPeriod(requestedPeriodMs);
+      logInfo("CFG", "Periode: " + String(sendPeriodMs) + " ms");
+      return "acked";
+    }
+    logInfo("CFG", "Periode invalide.");
+    return "failed";
+  }
+  else if (command == "reboot") {
+    requestRestart("commande reboot");
+    return "acked";
+  }
+  else if (command == "reset_energy_totals") {
+    resetEnergyTotals();
+    logInfo("ACT", "Totaux energie/cout RAZ");
+    return "acked";
+  }
+  else if (command == "reset_study") {
+    logInfo("ACT", "Reset audit sans impact sur les compteurs live");
+    return "acked";
+  }
+  else {
+    logInfo("CMD", "Non geree: " + command);
+    return "unsupported";
+  }
+}
+
+void acknowledgeCommand(int commandId, const String& status) {
+  if (commandId <= 0 || WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  HTTPClient http;
+  const String url = String(getServerBase()) + "/api/cmd_ack";
+  beginApiRequest(http, url);
+  http.setTimeout(HTTP_TIMEOUT_MS);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-API-TOKEN", API_TOKEN);
+
+  const String payload = "{\"id\":" + String(commandId) + ",\"status\":\"" + status + "\"}";
+  const int code = http.POST(payload);
+  if (code == HTTP_CODE_OK) {
+    logInfo("CMD", "Ack " + status + " id=" + String(commandId));
+  } else {
+    logInfo("CMD", "Ack echec id=" + String(commandId) + " code=" + String(code));
+  }
+  http.end();
+}
+
+// ============================================================
+// ENVOI TELEMETRIE
+// ============================================================
+void sendTelemetry() {
+  if (WiFi.status() != WL_CONNECTED) {
+    logInfo("INGEST", "WiFi OFF, envoi saute.");
+    readTelemetry();
+    return;
+  }
+
+  const TelemetrySnapshot snapshot = readTelemetry();
+  const String payload = buildTelemetryPayload(snapshot);
+
+  HTTPClient http;
+  const String url = String(getServerBase()) + "/api/ingest";
+  beginApiRequest(http, url);
+  http.setTimeout(HTTP_TIMEOUT_MS);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-API-TOKEN", API_TOKEN);
+
+  const int code = http.POST(payload);
+  logInfo("INGEST", "POST -> " + String(code));
+
+  if (code > 0 && code != 200) {
+    logInfo("INGEST", "Reponse: " + http.getString());
+  } else if (code <= 0) {
+    logInfo("INGEST", "ERR: " + http.errorToString(code));
+  }
+  http.end();
+}
+
+// ============================================================
+// PULL COMMANDES
+// ============================================================
+void pullCommand() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  HTTPClient http;
+  const String url = String(getServerBase()) + "/api/pull_cmd?device_id=" + DEVICE_ID;
+  beginApiRequest(http, url);
+  http.setTimeout(HTTP_TIMEOUT_MS);
+  http.addHeader("X-API-TOKEN", API_TOKEN);
+
+  const int code = http.GET();
+
+  if (code == HTTP_CODE_OK) {
+    const String response = http.getString();
+    const String command = extractJsonString(response, "command");
+
+    if (command.length() > 0) {
+      logInfo("CMD", "Recu: " + response);
+      const int commandId = extractJsonInt(response, "id", -1);
+      const int requestedPeriodMs = extractJsonInt(response, "period_ms", -1);
+      const String status = handleCommand(command, requestedPeriodMs);
+      acknowledgeCommand(commandId, status);
+    }
+  }
+  http.end();
+}
+
+// ============================================================
+// SETUP
+// ============================================================
+void setup() {
+  Serial.begin(115200);
+  delay(500);
+
+  Serial.println();
+  Serial.println("================================================");
+  logInfo("BOOT", "Smart Energy Audit V2 - Mode LED (sans relais)");
+  Serial.println("================================================");
+
+  initLcd();
+  delay(1000);
+  initSecureClient();
+  
+  configurePins();
+  
+  lcdShowBoot("Init capteurs");
+  dht.begin();
+  delay(2000);
+  
+  calibratePir();
+  
+  connectWiFiBlocking();
+
+  logInfo("CFG", "Periode: " + String(sendPeriodMs) + " ms");
+  logInfo("CFG", "Serveur: " + String(getServerBase()));
+
+  lastCycleMs = millis() - sendPeriodMs;
+  lastEnergyUpdateMs = millis();
+  lastLcdSwitchMs = millis();
+  sampleDhtSensors(millis(), true);
+  initializePirTracking();
+}
+
+// ============================================================
+// LOOP
+// ============================================================
+void loop() {
+  ensureWiFiConnection();
+  performPendingRestart();
+
+  const unsigned long now = millis();
+  processPirStateChange(now);
+  
+  if (now - lastCycleMs >= sendPeriodMs) {
+    lastCycleMs = now;
+    sendTelemetry();
+    pullCommand();
+    performPendingRestart();
+  }
+  
+  updateLcdRotation();
+  updateBuzzer();
+  
+  delay(20);
+}

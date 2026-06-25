@@ -1,0 +1,13 @@
+C’est prêt.
+
+- Un seul switch pilote maintenant l’environnement: `USE_PRODUCTION_SERVER = true/false` dans [code esp32](/C:/Users/hp/Desktop/monitoring%20energy/code%20esp32#L15).
+- Le sketch choisit automatiquement l’URL locale ou PythonAnywhere via `getServerBase()` dans [code esp32](/C:/Users/hp/Desktop/monitoring%20energy/code%20esp32#L47).
+- Les appels réseau passent tous par `beginApiRequest()`, donc `ingest`, `pull_cmd` et `cmd_ack` suivent le même mode dans [code esp32](/C:/Users/hp/Desktop/monitoring%20energy/code%20esp32#L55) et [code esp32](/C:/Users/hp/Desktop/monitoring%20energy/code%20esp32#L864).
+- En mode production, le client TLS est activé automatiquement; en local, il reste en HTTP simple dans [code esp32](/C:/Users/hp/Desktop/monitoring%20energy/code%20esp32#L47) et [code esp32](/C:/Users/hp/Desktop/monitoring%20energy/code%20esp32#L929).
+
+À changer selon ton besoin:
+- Local: `USE_PRODUCTION_SERVER = false`
+- Production: `USE_PRODUCTION_SERVER = true`
+
+Si tu veux, je peux aussi te faire une petite version “propre soutenance” avec un commentaire très visible en haut du fichier du style:
+`// CHANGE ONLY THIS LINE` et un mini bloc `LOCAL / PROD`.

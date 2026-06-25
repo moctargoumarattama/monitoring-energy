@@ -8,16 +8,19 @@ import os
 from datetime import datetime
 
 from energy_rules import DEFAULT_COMFORT_PROFILE, evaluate_energy_state
+from study_audit import normalize_study_pair
 
-APP_TOKEN = "esp32_maison_2024"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "energy.db")
+APP_TOKEN = os.environ.get("APP_TOKEN", "esp32_maison_2024")
+DB_PATH = os.environ.get("DB_PATH", os.path.join(BASE_DIR, "energy.db"))
 COMFORT_PROFILE_ID = 1
 AUTO_COMMAND_COOLDOWN_SECONDS = 30
 MANUAL_OVERRIDE_WINDOW_SECONDS = 120
 DEFAULT_PRICE_PER_KWH = 1.2
 STUDY_EXPERIMENT_NAME = "pfa_energy_audit"
 PREDICTION_SAMPLE_LIMIT = 20
+ENERGY_TOTALS_RESET_AT_KEY_PREFIX = "energy_totals_reset_at"
+ENERGY_TOTALS_RESET_OFFSET_KEY_PREFIX = "energy_totals_reset_offset_kwh"
 
 TELEMETRY_COLUMNS = [
     ("id", "INTEGER PRIMARY KEY AUTOINCREMENT"),
@@ -28,6 +31,7 @@ TELEMETRY_COLUMNS = [
     ("window_open", "INTEGER"),
     ("temp_ok", "INTEGER"),
     ("temp_c", "REAL"),
+    ("humidity", "REAL"),
     ("current_a", "REAL"),
     ("power_w", "REAL"),
     ("energy_total_kwh", "REAL"),
@@ -54,7 +58,10 @@ ALLOWED_COMMANDS = {
     "fan_on",
     "fan_off",
     "fan_auto",
+    "window_open",
+    "window_close",
     "reset_study",
+    "reset_energy_totals",
     "reboot",
     "set_period",
     "set_price",
@@ -69,6 +76,7 @@ ALLOWED_COMMANDS = {
 COALESCE_GROUPS = [
     {"lamp_on", "lamp_off"},
     {"fan_on", "fan_off", "fan_auto"},
+    {"window_open", "window_close"},
     {"set_period"},
     {"set_price"},
     {"daily_report_now"},
@@ -474,6 +482,7 @@ def normalize_telemetry(data):
         "window_open": parse_bool(data.get("window_open")),
         "temp_ok": parse_bool(data.get("temp_ok"), default=True),
         "temp_c": parse_float(data.get("temp_c"), 0.0),
+        "humidity": parse_float(data.get("humidity"), 0.0),
         "current_a": parse_float(data.get("current_a"), 0.0),
         "power_w": parse_float(data.get("power_w"), 0.0),
         "energy_total_kwh": parse_float(data.get("energy_total_kwh"), 0.0),
@@ -496,11 +505,18 @@ def compute_alert_count(normalized, evaluation):
     return alert_count
 
 
-def serialize_telemetry_row(row):
+def serialize_telemetry_row(row, db=None):
     data = dict(row)
+    if db is not None:
+        energy_total_kwh, cost_mad = get_display_energy_totals(db, row)
+        data["energy_total_kwh"] = energy_total_kwh
+        data["cost_mad"] = cost_mad
+        data["price_per_kwh"] = get_price_per_kwh(db)
+
     data["presence"] = parse_bool(data.get("presence"))
     data["window_open"] = parse_bool(data.get("window_open"))
     data["temp_ok"] = parse_bool(data.get("temp_ok"), default=True)
+    data["humidity"] = parse_float(data.get("humidity"), 0.0)
     data["lamp_on"] = parse_bool(data.get("lamp_on"))
     data["fan_on"] = parse_bool(data.get("fan_on"))
     data["anomaly_dht_fail"] = parse_bool(data.get("anomaly_dht_fail"))
@@ -543,6 +559,59 @@ def set_price_per_kwh(db, value):
     price = round(price, 4)
     set_setting(db, "price_per_kwh", price)
     return price
+
+
+def energy_totals_reset_setting_key(device_id, suffix):
+    return f"{suffix}:{device_id}"
+
+
+def get_energy_totals_reset_state(db, device_id):
+    reset_at = int(
+        parse_float(
+            get_setting(db, energy_totals_reset_setting_key(device_id, ENERGY_TOTALS_RESET_AT_KEY_PREFIX), 0),
+            0,
+        )
+    )
+    offset = max(
+        0.0,
+        parse_float(
+            get_setting(db, energy_totals_reset_setting_key(device_id, ENERGY_TOTALS_RESET_OFFSET_KEY_PREFIX), 0.0),
+            0.0,
+        ),
+    )
+    return reset_at, offset
+
+
+def get_display_energy_totals(db, row):
+    if not row:
+        return 0.0, 0.0
+
+    raw_energy_total_kwh = parse_float(row["energy_total_kwh"], 0.0)
+    row_ts = int(row["ts"] or 0)
+    device_id = row["device_id"]
+    reset_at, offset_kwh = get_energy_totals_reset_state(db, device_id)
+
+    if reset_at and row_ts <= reset_at:
+        display_energy_kwh = 0.0
+    else:
+        display_energy_kwh = max(0.0, raw_energy_total_kwh - offset_kwh)
+
+    display_energy_kwh = round(display_energy_kwh, 4)
+    display_cost_mad = round(display_energy_kwh * get_price_per_kwh(db), 4)
+    return display_energy_kwh, display_cost_mad
+
+
+def mark_energy_totals_reset(db, device_id):
+    latest_row = get_latest_telemetry_row(db, device_id)
+    offset_kwh = parse_float(latest_row["energy_total_kwh"], 0.0) if latest_row else 0.0
+    reset_at = int(time.time())
+    set_setting(db, energy_totals_reset_setting_key(device_id, ENERGY_TOTALS_RESET_AT_KEY_PREFIX), reset_at)
+    set_setting(
+        db,
+        energy_totals_reset_setting_key(device_id, ENERGY_TOTALS_RESET_OFFSET_KEY_PREFIX),
+        round(max(0.0, offset_kwh), 6),
+    )
+    return {"reset_at": reset_at, "energy_offset_kwh": round(max(0.0, offset_kwh), 6)}
 
 
 def get_latest_telemetry_row(db, device_id):
@@ -754,9 +823,17 @@ def build_study_result(db, device_id, name=STUDY_EXPERIMENT_NAME):
     duration_after = study_duration_seconds(after_session)
 
     has_pair = before_session is not None and after_session is not None
-    gain_kwh = before_kwh - after_kwh if has_pair else 0.0
-    reduction_percent = (100.0 * gain_kwh / before_kwh) if has_pair and before_kwh > 1e-9 else 0.0
-    cost_saving = gain_kwh * get_price_per_kwh(db) if has_pair else 0.0
+    if has_pair:
+        normalized = normalize_study_pair(before_kwh, after_kwh)
+        before_kwh = normalized["before_kwh"]
+        after_kwh = normalized["after_kwh"]
+        gain_kwh = normalized["gain_kwh"]
+        reduction_percent = normalized["reduction_percent"]
+        cost_saving = gain_kwh * get_price_per_kwh(db)
+    else:
+        gain_kwh = 0.0
+        reduction_percent = 0.0
+        cost_saving = 0.0
 
     return {
         "before_kwh": round(before_kwh, 4),
@@ -795,8 +872,7 @@ def persist_study_report_snapshot(db, device_id, name=STUDY_EXPERIMENT_NAME):
 def persist_financial_audit_snapshot(db, device_id, name=STUDY_EXPERIMENT_NAME):
     study = build_study_result(db, device_id, name=name)
     latest_row = get_latest_telemetry_row(db, device_id)
-    energy_total_kwh = parse_float(latest_row["energy_total_kwh"], 0.0) if latest_row else 0.0
-    cost_total_mad = parse_float(latest_row["cost_mad"], 0.0) if latest_row else 0.0
+    energy_total_kwh, cost_total_mad = get_display_energy_totals(db, latest_row) if latest_row else (0.0, 0.0)
     price_per_kwh = get_price_per_kwh(db)
 
     db.execute(
@@ -824,8 +900,8 @@ def persist_financial_audit_snapshot(db, device_id, name=STUDY_EXPERIMENT_NAME):
     )
     return {
         "price_per_kwh": price_per_kwh,
-        "energy_total_kwh": round(energy_total_kwh, 4),
-        "cost_total_mad": round(cost_total_mad, 4),
+        "energy_total_kwh": energy_total_kwh,
+        "cost_total_mad": cost_total_mad,
         **study,
     }
 
@@ -888,6 +964,8 @@ def apply_backend_command_side_effects(db, device_id, command, payload):
         price_per_kwh = set_price_per_kwh(db, payload.get("price"))
         recompute_telemetry_energy(db, device_id=device_id)
         return {"price_per_kwh": price_per_kwh}
+    if command == "reset_energy_totals":
+        return mark_energy_totals_reset(db, device_id)
     if command == "study_start_before":
         return start_study_phase(db, device_id, "before")
     if command == "study_start_after":
@@ -1079,11 +1157,11 @@ def ingest():
         """
         INSERT INTO telemetry (
             ts, device_id, mode, presence, window_open, temp_ok, temp_c,
-            current_a, power_w, energy_total_kwh, energy_before_kwh, energy_after_kwh,
+            humidity, current_a, power_w, energy_total_kwh, energy_before_kwh, energy_after_kwh,
             cost_mad, lamp_on, fan_on, anomaly_dht_fail, alerts, remote_enabled,
             thermal_state, recommended_action, critical_temp_alert, energy_anomaly_json,
             comfort_score, auto_command, reasons_json
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
         (
             ts_now,
@@ -1093,6 +1171,7 @@ def ingest():
             1 if normalized["window_open"] else 0,
             1 if normalized["temp_ok"] else 0,
             normalized["temp_c"],
+            normalized["humidity"],
             normalized["current_a"],
             normalized["power_w"],
             normalized["energy_total_kwh"],
@@ -1394,7 +1473,7 @@ def latest():
     if not row:
         return jsonify({"ok": True, "data": None})
 
-    return jsonify({"ok": True, "data": serialize_telemetry_row(row)})
+    return jsonify({"ok": True, "data": serialize_telemetry_row(row, db)})
 
 
 @app.route("/api/series")
@@ -1539,6 +1618,7 @@ def history():
         SELECT
             ts,
             temp_c,
+            humidity,
             power_w,
             energy_total_kwh,
             cost_mad,
@@ -1613,6 +1693,7 @@ def pull_cmd():
     compress_groups = [
         ("lamp_on", "lamp_off"),
         ("fan_on", "fan_off", "fan_auto"),
+        ("window_open", "window_close"),
         ("set_period",),
         ("set_price",),
         ("daily_report_now",),

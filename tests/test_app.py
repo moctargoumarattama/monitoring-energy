@@ -19,6 +19,7 @@ DEFAULT_INGEST_PAYLOAD = {
     "window_open": False,
     "temp_ok": True,
     "temp_c": 24.0,
+    "humidity": 48.0,
     "current_a": 0.8,
     "power_w": 120.0,
     "energy_total_kwh": 999.0,
@@ -214,6 +215,29 @@ class ComfortProfileApiTests(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 400)
 
+    def test_window_commands_are_accepted(self):
+        for command in ("window_open", "window_close"):
+            response = self.client.post(
+                "/api/cmd",
+                headers=API_HEADERS,
+                json={
+                    "device_id": "esp32-1",
+                    "command": command,
+                    "payload": {},
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            self.assertTrue(payload["ok"])
+            self.assertTrue(payload["queued"])
+            row = self.get_db_row(
+                "SELECT command, status FROM commands WHERE id=?",
+                (payload["id"],),
+            )
+            self.assertIsNotNone(row)
+            self.assertEqual(row["command"], command)
+            self.assertEqual(row["status"], "pending")
+
     def test_ingest_calculates_backend_energy_and_cost_from_power_and_persisted_price(self):
         set_price = self.post_json_at(
             100,
@@ -298,6 +322,38 @@ class ComfortProfileApiTests(unittest.TestCase):
         self.assertAlmostEqual(latest_study_data["before_kwh"], 0.1, places=4)
         self.assertAlmostEqual(latest_study_data["after_kwh"], 0.06, places=4)
 
+    def test_study_result_is_normalized_when_after_exceeds_before(self):
+        self.assertEqual(self.ingest_at(1000, power_w=100.0).status_code, 200)
+        self.assertEqual(
+            self.post_json_at(1000, "/api/study/start_before", {"device_id": "esp32-1"}).status_code,
+            200,
+        )
+        self.assertEqual(self.ingest_at(4600, power_w=100.0).status_code, 200)
+        self.assertEqual(
+            self.post_json_at(4600, "/api/study/stop_before", {"device_id": "esp32-1"}).status_code,
+            200,
+        )
+
+        self.assertEqual(self.ingest_at(4601, power_w=200.0).status_code, 200)
+        self.assertEqual(
+            self.post_json_at(4601, "/api/study/start_after", {"device_id": "esp32-1"}).status_code,
+            200,
+        )
+        self.assertEqual(self.ingest_at(8201, power_w=200.0).status_code, 200)
+        self.assertEqual(
+            self.post_json_at(8201, "/api/study/stop_after", {"device_id": "esp32-1"}).status_code,
+            200,
+        )
+
+        result = self.client.get("/api/study/result?device_id=esp32-1")
+        self.assertEqual(result.status_code, 200)
+        payload = result.get_json()
+
+        self.assertGreater(payload["before_kwh"], payload["after_kwh"])
+        self.assertGreater(payload["gain_kwh"], 0.0)
+        self.assertGreater(payload["reduction_percent"], 0.0)
+        self.assertGreater(payload["cost_saving"], 0.0)
+
     def test_reset_study_command_resets_new_study_workflow_result(self):
         self.assertEqual(self.ingest_at(1000, power_w=100.0).status_code, 200)
         self.assertEqual(
@@ -344,6 +400,94 @@ class ComfortProfileApiTests(unittest.TestCase):
         self.assertEqual(after_reset["duration_before"], 0)
         self.assertEqual(after_reset["duration_after"], 0)
 
+    def test_reset_energy_totals_command_resets_live_totals_display(self):
+        self.assertEqual(self.ingest_at(1000, power_w=100.0).status_code, 200)
+        self.assertEqual(self.ingest_at(4600, power_w=100.0).status_code, 200)
+
+        latest_before = self.client.get("/api/latest?device_id=esp32-1")
+        self.assertEqual(latest_before.status_code, 200)
+        latest_before_data = latest_before.get_json()["data"]
+        self.assertGreater(latest_before_data["energy_total_kwh"], 0.0)
+        self.assertGreater(latest_before_data["cost_mad"], 0.0)
+
+        reset_response = self.post_json_at(
+            4700,
+            "/api/cmd",
+            {
+                "device_id": "esp32-1",
+                "command": "reset_energy_totals",
+                "payload": {},
+            },
+        )
+        self.assertEqual(reset_response.status_code, 200)
+        reset_payload = reset_response.get_json()
+        self.assertTrue(reset_payload["ok"])
+        self.assertIn("backend", reset_payload)
+        self.assertGreaterEqual(reset_payload["backend"]["energy_offset_kwh"], 0.0)
+
+        offset_row = self.get_db_row(
+            "SELECT value FROM app_settings WHERE key=?",
+            ("energy_totals_reset_at:esp32-1",),
+        )
+        self.assertIsNotNone(offset_row)
+
+        latest_after_reset = self.client.get("/api/latest?device_id=esp32-1")
+        self.assertEqual(latest_after_reset.status_code, 200)
+        latest_after_reset_data = latest_after_reset.get_json()["data"]
+        self.assertEqual(latest_after_reset_data["energy_total_kwh"], 0.0)
+        self.assertEqual(latest_after_reset_data["cost_mad"], 0.0)
+
+        self.assertEqual(self.ingest_at(8201, power_w=100.0).status_code, 200)
+        latest_after_restart = self.client.get("/api/latest?device_id=esp32-1")
+        self.assertEqual(latest_after_restart.status_code, 200)
+        latest_after_restart_data = latest_after_restart.get_json()["data"]
+        self.assertGreater(latest_after_restart_data["energy_total_kwh"], 0.0)
+        self.assertGreater(latest_after_restart_data["cost_mad"], 0.0)
+
+    def test_cmd_ack_marks_pulled_command_as_acked(self):
+        queued = self.post_json_at(
+            5000,
+            "/api/cmd",
+            {
+                "device_id": "esp32-1",
+                "command": "fan_on",
+                "payload": {},
+            },
+        )
+        self.assertEqual(queued.status_code, 200)
+        queued_data = queued.get_json()
+        self.assertTrue(queued_data["ok"])
+        self.assertIn("id", queued_data)
+
+        with mock.patch.object(app_module.time, "time", return_value=5001):
+            pulled = self.client.get(
+                "/api/pull_cmd?device_id=esp32-1",
+                headers={"X-API-TOKEN": app_module.APP_TOKEN},
+            )
+        self.assertEqual(pulled.status_code, 200)
+        pulled_data = pulled.get_json()
+        self.assertTrue(pulled_data["ok"])
+        self.assertIsNotNone(pulled_data["cmd"])
+        self.assertEqual(pulled_data["cmd"]["id"], queued_data["id"])
+
+        ack = self.post_json_at(
+            5002,
+            "/api/cmd_ack",
+            {
+                "id": queued_data["id"],
+                "status": "acked",
+            },
+        )
+        self.assertEqual(ack.status_code, 200)
+        self.assertTrue(ack.get_json()["ok"])
+
+        status_row = self.get_db_row(
+            "SELECT status FROM commands WHERE id=?",
+            (queued_data["id"],),
+        )
+        self.assertIsNotNone(status_row)
+        self.assertEqual(status_row["status"], "acked")
+
     def test_prediction_endpoint_projects_recent_average_power(self):
         self.assertEqual(self.ingest_at(1000, power_w=100.0).status_code, 200)
         self.assertEqual(self.ingest_at(1010, power_w=200.0).status_code, 200)
@@ -373,6 +517,7 @@ class ComfortProfileApiTests(unittest.TestCase):
 
         latest = data["items"][0]
         self.assertEqual(latest["temp_c"], 24.5)
+        self.assertAlmostEqual(latest["humidity"], 48.0, places=4)
         self.assertAlmostEqual(latest["power_w"], 100.0, places=4)
         self.assertAlmostEqual(latest["energy_total_kwh"], 0.1, places=4)
         self.assertAlmostEqual(latest["cost_mad"], 0.12, places=4)
@@ -442,28 +587,54 @@ class ComfortProfileApiTests(unittest.TestCase):
         self.assertIn("D\u00e9marrer APR\u00c8S", html)
         self.assertIn("Stop APR\u00c8S", html)
         self.assertIn("Actualiser r\u00e9sultat", html)
-        self.assertIn("Mode audit \u00e9nerg\u00e9tique actif", html)
+        self.assertNotIn("Mode audit \u00e9nerg\u00e9tique actif - une seule cha\u00eene officielle bas\u00e9e sur les routes /api/study/*.", html)
+        self.assertIn("studySavingsMad", html)
+        self.assertIn("studyVisualGain", html)
+        self.assertNotIn("studySavingsPercent", html)
+        self.assertNotIn("studyCostSavingValue", html)
+        self.assertNotIn('<span class="badge">IoT Energy Monitoring</span>', html)
+        self.assertNotIn('<span class="badge">SCADA moderne</span>', html)
+        self.assertIn("insightCard", html)
+        self.assertIn("insightBadge", html)
+        self.assertIn("insightRecommendationRow", html)
+        self.assertIn("comfortCurrentStateKpi", html)
+        self.assertNotIn("comfortCurrentActionKpi", html)
+        self.assertLess(html.index('id="comfortCurrentStateKpi"'), html.index('id="comfortMin"'))
+        self.assertNotIn("DAILY REPORT NOW", html)
         self.assertIn("/api/study/start_before", html)
         self.assertIn("/api/study/stop_before", html)
         self.assertIn("/api/study/start_after", html)
         self.assertIn("/api/study/stop_after", html)
         self.assertIn("/api/study/result", html)
+        self.assertIn("reset_energy_totals", html)
         self.assertIn("/api/prediction", html)
         self.assertIn("/api/history", html)
+        self.assertIn("cmd('window_open')", html)
+        self.assertIn("cmd('window_close')", html)
 
     def test_dashboard_template_uses_clear_score_labels(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         html = response.get_data(as_text=True)
 
-        self.assertIn("Score instantan\u00e9", html)
-        self.assertIn("Bas\u00e9 sur la mesure actuelle", html)
+        self.assertNotIn("Score instantan\u00e9", html)
+        self.assertNotIn("Bas\u00e9 sur la mesure actuelle", html)
+        self.assertIn("Donn\u00e9es capt\u00e9es maintenant", html)
+        self.assertIn("iotPresenceNow", html)
+        self.assertIn("iotWindowNow", html)
+        self.assertIn("iotHumidityNow", html)
+        self.assertNotIn('id="comfortCurrentTemp"', html)
+        self.assertNotIn("Temp\u00e9rature actuelle :", html)
         self.assertIn("Score global", html)
         self.assertIn("Tient compte du contexte", html)
         self.assertIn("Fiabilit\u00e9 des mesures", html)
         self.assertIn("Qualit\u00e9 des donn\u00e9es re\u00e7ues", html)
         self.assertIn("async function fetchLatest()", html)
         self.assertIn("async function fetchPrediction()", html)
+        self.assertIn("commandPopup", html)
+        self.assertIn("showCommandPopup", html)
+        self.assertIn("playCommandSound", html)
+        self.assertIn("getButtonFeedbackLabel", html)
 
     def test_dashboard_template_uses_active_anomaly_copy(self):
         response = self.client.get("/")
@@ -482,6 +653,8 @@ class ComfortProfileApiTests(unittest.TestCase):
         self.assertIn("anomalyState-alert", html)
         self.assertIn("atotal-ok", html)
         self.assertIn("atotal-alert", html)
+        self.assertIn("Humidit", html)
+        self.assertIn("iotHumidityNow", html)
         self.assertIn("async function updateDashboard()", html)
         self.assertIn("setInterval(updateDashboard, 1000)", html)
 

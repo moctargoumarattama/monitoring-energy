@@ -37,19 +37,28 @@
     .eyebrow{color:var(--cyan);font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em}
     .title{font-family:"Space Grotesk",sans-serif;font-size:clamp(1.65rem,2.1vw,2.45rem);font-weight:700;letter-spacing:0}
     .subtitle{color:var(--muted);font-size:.9rem}
+    .headerLogo{
+      width:88px;height:88px;flex:0 0 auto;object-fit:contain;
+      padding:8px;border-radius:18px;border:1px solid var(--line);
+      background:rgba(255,255,255,.03);box-shadow:0 10px 24px rgba(0,0,0,.24)
+    }
     .badges{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
     .badge{border:1px solid var(--line);border-radius:999px;padding:7px 11px;font-size:.78rem;color:var(--soft);background:rgba(12,31,49,.72);font-weight:700;white-space:nowrap}
     .badge-live{color:#dfffee;border-color:rgba(50,213,131,.58);background:rgba(50,213,131,.16)}
     .badge-offline{color:#ffe4e7;border-color:rgba(255,91,108,.58);background:rgba(255,91,108,.16)}
-    .kpiBand{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+    .kpiBand{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
     .kpi{
       border:1px solid var(--line);border-radius:var(--r);background:linear-gradient(180deg,rgba(17,42,65,.86),rgba(9,24,39,.76));
-      padding:13px;min-height:104px;display:grid;gap:7px;align-content:space-between;box-shadow:0 10px 30px rgba(0,0,0,.2)
+      padding:8px 10px;min-height:80px;display:grid;gap:4px;align-content:start;box-shadow:0 10px 30px rgba(0,0,0,.2)
     }
+    .captureKpi{min-height:88px;align-content:start}
+    .captureKpi .captureGrid{margin-top:0}
     .kpi-label,.metric-label{color:#9eb8ca;font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
-    .kpi-value{font-family:"Space Grotesk",sans-serif;font-size:1.55rem;font-weight:700;color:#f8fcff;line-height:1}
+    .kpi-value{font-family:"Space Grotesk",sans-serif;font-size:1.48rem;font-weight:700;color:#f8fcff;line-height:1}
     .kpi-unit,.metric-unit{color:#8ea8ba;font-size:.8rem;margin-left:4px}
     .kpi-note,.metric-note{color:var(--muted);font-size:.72rem;line-height:1.25}
+    .kpi-actions{display:flex;justify-content:flex-end}
+    button.miniAction{min-height:26px;padding:5px 9px;font-size:.66rem;border-radius:999px;line-height:1;letter-spacing:.04em}
     .cockpit{display:grid;grid-template-columns:minmax(280px,.86fr) minmax(520px,1.65fr) minmax(340px,1fr);gap:14px;align-items:start}
     .column{display:grid;gap:14px}
     .card,.chartCard{
@@ -90,11 +99,21 @@
     .study{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center}
     .study strong{display:block;font-family:"Space Grotesk",sans-serif;font-size:1.18rem;color:#ffe08a}
     .study span{font-size:.7rem;color:#9eb8ca;text-transform:uppercase;letter-spacing:.08em}
+    .studyHighlights{
+      display:grid;gap:8px;padding:12px;border:1px solid var(--line2);border-radius:8px;
+      background:rgba(3,14,25,.35)
+    }
+    .studyHighlights .save{font-size:1.58rem;color:#ffe08a}
+    .studyHighlights .note{font-size:.9rem;color:#c7d9e7;font-weight:600}
     .save{font-family:"Space Grotesk",sans-serif;font-size:1.36rem;font-weight:700;text-align:center;line-height:1.1}
     .note{text-align:center;font-size:.8rem;color:#a9c0d2}
     .note-left{text-align:left}
     .positive{color:var(--ok)!important}.negative{color:var(--bad)!important}.neutral{color:#d5e4f0!important}
     .status{border:1px solid var(--line2);border-radius:8px;background:rgba(3,14,25,.45);color:#c9dae7;padding:8px 10px;font-size:.8rem;overflow-wrap:anywhere}
+    .thermalState{font-family:"Space Grotesk",sans-serif;font-size:1.02rem;font-weight:800}
+    .thermalState-ok{color:#7ef0aa}
+    .thermalState-watch{color:#ffd06a}
+    .thermalState-critical{color:#ff8b96}
     .anomNow{display:none;border:1px solid rgba(255,91,108,.48);background:rgba(255,91,108,.12);border-radius:8px;color:#ffdce1;padding:9px 10px;font-size:.8rem}
     .summaryList{display:grid;gap:7px;font-size:.86rem;color:#d6e5ef}
     .summaryList strong{font-family:"Space Grotesk",sans-serif;color:#fff;font-size:.95rem}
@@ -110,6 +129,21 @@
     .insightRow{border:1px solid var(--line2);border-radius:8px;background:rgba(3,14,25,.42);padding:10px;display:grid;gap:5px}
     .insightRow span{font-size:.68rem;color:#9eb8ca;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
     .insightRow strong{font-size:.92rem;color:#fff;line-height:1.36}
+    .insightCard{position:relative;overflow:hidden}
+    .insightHeading{display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .insightHeading .statusPill{padding:5px 10px;font-size:.66rem}
+    .insightCard::before{
+      content:"";position:absolute;inset:0 auto 0 0;width:4px;background:linear-gradient(180deg,var(--cyan),transparent);
+      opacity:.9
+    }
+    .insightCard-watch{border-color:rgba(247,185,85,.42);box-shadow:0 12px 34px rgba(247,185,85,.06)}
+    .insightCard-critical{border-color:rgba(255,91,108,.58);box-shadow:0 12px 38px rgba(255,91,108,.10)}
+    .insightCard-correct{border-color:rgba(58,141,255,.48);box-shadow:0 12px 34px rgba(58,141,255,.08)}
+    .insightCard-ok{border-color:rgba(50,213,131,.42);box-shadow:0 12px 34px rgba(50,213,131,.06)}
+    .insightRecommendationRow{border-color:rgba(255,138,0,.62);background:linear-gradient(180deg,rgba(255,138,0,.14),rgba(3,14,25,.50))}
+    .insightRecommendationRow strong{font-size:.98rem;line-height:1.42}
+    .insightRecommendationRow-watch{border-color:rgba(247,185,85,.72)}
+    .insightRecommendationRow-critical{border-color:rgba(255,91,108,.72);background:linear-gradient(180deg,rgba(255,91,108,.14),rgba(3,14,25,.52))}
     .scoreHero{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap}
     .scoreValue{font-family:"Space Grotesk",sans-serif;font-size:1.9rem;font-weight:700;line-height:1;color:#ffe08a}
     .statusPill{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:6px 10px;border:1px solid rgba(66,215,255,.42);background:rgba(66,215,255,.14);color:#e3f7ff;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
@@ -179,18 +213,55 @@
       animation:flowPulse 1.25s linear infinite
     }
     @keyframes flowPulse{0%{top:0;opacity:0}20%{opacity:1}100%{top:18px;opacity:0}}
-    .captureGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .captureGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
     .captureItem{border:1px solid var(--line2);border-radius:8px;background:rgba(3,14,25,.42);padding:9px;display:grid;gap:4px;min-height:60px}
     .captureItem span{font-size:.65rem;color:#9eb8ca;text-transform:uppercase;letter-spacing:.08em;font-weight:800}
     .captureItem strong{font-family:"Space Grotesk",sans-serif;font-size:1rem;color:#fff;line-height:1.1}
     .bottomWide canvas{height:360px!important}
+    .commandPopup{
+      position:fixed;inset:0;display:grid;place-items:center;padding:16px;opacity:0;pointer-events:none;
+      transform:translateY(10px) scale(.985);transition:opacity .18s ease,transform .18s ease;z-index:10000
+    }
+    .commandPopup.show{opacity:1;transform:translateY(0) scale(1)}
+    .commandPopupBackdrop{position:absolute;inset:0;background:rgba(2,10,18,.58);backdrop-filter:blur(5px)}
+    .commandPopupCard{
+      position:relative;display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;
+      min-width:min(520px,calc(100vw - 32px));padding:18px 20px;border-radius:18px;
+      border:1px solid rgba(66,215,255,.44);background:linear-gradient(180deg,rgba(11,28,44,.98),rgba(5,15,26,.96));
+      box-shadow:0 28px 90px rgba(0,0,0,.48)
+    }
+    .commandPopupIcon{
+      width:56px;height:56px;border-radius:16px;display:grid;place-items:center;
+      font-family:"Space Grotesk",sans-serif;font-size:.9rem;font-weight:800;letter-spacing:.08em;
+      color:#e7fbff;border:1px solid rgba(66,215,255,.5);background:rgba(66,215,255,.16)
+    }
+    .commandPopupTitle{font-size:.72rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.14em;font-weight:800}
+    .commandPopupMessage{margin-top:4px;font-family:"Space Grotesk",sans-serif;font-size:1.6rem;font-weight:700;color:#f8fdff;line-height:1.05}
+    .commandPopupHint{margin-top:6px;font-size:.82rem;color:#a8c0d3}
+    .commandPopup-sending .commandPopupCard{border-color:rgba(247,185,85,.5)}
+    .commandPopup-sending .commandPopupIcon{border-color:rgba(247,185,85,.55);background:rgba(247,185,85,.16);color:#ffe9bb}
+    .commandPopup-success .commandPopupCard{border-color:rgba(50,213,131,.58);box-shadow:0 28px 90px rgba(50,213,131,.12)}
+    .commandPopup-success .commandPopupIcon{border-color:rgba(50,213,131,.58);background:rgba(50,213,131,.16);color:#e8fff2}
+    .commandPopup-error .commandPopupCard{border-color:rgba(255,91,108,.62);box-shadow:0 28px 90px rgba(255,91,108,.12)}
+    .commandPopup-error .commandPopupIcon{border-color:rgba(255,91,108,.62);background:rgba(255,91,108,.16);color:#ffe2e7}
     .toast{position:fixed;right:16px;bottom:16px;border-radius:8px;border:1px solid rgba(50,213,131,.7);background:rgba(20,90,58,.94);color:#ecfff4;padding:10px 14px;font-size:.82rem;z-index:9999}
     @media (max-width:1440px){.cockpit{grid-template-columns:1fr 1.35fr}.rightRail{grid-column:1/-1;grid-template-columns:repeat(2,minmax(0,1fr))}.kpiBand{grid-template-columns:repeat(3,minmax(0,1fr))}}
     @media (max-width:980px){body{padding:12px}.cockpit,.rightRail{grid-template-columns:1fr}.kpiBand{grid-template-columns:repeat(2,minmax(0,1fr))}.insightGrid{grid-template-columns:1fr}.primaryChart canvas{height:320px!important}}
-    @media (max-width:620px){.kpiBand,.metrics,.btns,.btns.three,.row,.configGrid,.study,.captureGrid{grid-template-columns:1fr}.top{align-items:flex-start}.badges{justify-content:flex-start}canvas{height:230px!important}}
+    @media (max-width:620px){.kpiBand,.metrics,.btns,.btns.three,.row,.configGrid,.study,.captureGrid{grid-template-columns:1fr}.top{align-items:flex-start}.badges{justify-content:flex-start}canvas{height:230px!important}.commandPopupCard{min-width:0;width:100%;grid-template-columns:1fr;justify-items:center;text-align:center}.commandPopupMessage{font-size:1.35rem}}
   </style>
 </head>
 <body>
+  <div id="commandPopup" class="commandPopup" aria-hidden="true">
+    <div class="commandPopupBackdrop"></div>
+    <div class="commandPopupCard" role="status" aria-live="assertive" aria-atomic="true">
+      <div id="commandPopupIcon" class="commandPopupIcon">CMD</div>
+      <div>
+        <div id="commandPopupTitle" class="commandPopupTitle">Commande</div>
+        <div id="commandPopupMessage" class="commandPopupMessage">--</div>
+        <div id="commandPopupHint" class="commandPopupHint">--</div>
+      </div>
+    </div>
+  </div>
   <div class="dash">
     <header class="top">
       <div class="brand">
@@ -198,9 +269,8 @@
         <h1 class="title">Smart Energy Audit 4.0</h1>
         <div class="subtitle">Cockpit industriel de supervision énergétique ESP32</div>
       </div>
+      <img class="headerLogo" src="{{ url_for('static', filename='image.png') }}" alt="Logo audit énergétique">
       <div class="badges">
-        <span class="badge">IoT Energy Monitoring</span>
-        <span class="badge">SCADA moderne</span>
         <span id="liveBadge" class="badge badge-live">LIVE</span>
         <span id="connBadge" class="badge">SYNC OK</span>
         <span id="dataAge" class="badge">--</span>
@@ -212,6 +282,7 @@
       <div class="kpi">
         <div class="kpi-label">Température actuelle</div>
         <div><span id="tempValue" class="kpi-value">--</span><span class="metric-unit"> °C</span></div>
+        <div id="comfortCurrentStateKpi" class="thermalState thermalState-watch">État : --</div>
       </div>
       <div class="kpi">
         <div class="kpi-label">Puissance actuelle</div>
@@ -220,15 +291,20 @@
       <div class="kpi">
         <div class="kpi-label">Énergie totale</div>
         <div><span id="energyValue" class="kpi-value">--</span><span class="metric-unit"> kWh</span></div>
+        <div class="kpi-actions"><button class="miniAction" title="Remettre les totaux a zero" onclick="cmd('reset_energy_totals')">RAZ</button></div>
       </div>
       <div class="kpi">
         <div class="kpi-label">Coût total</div>
         <div><span id="costValue" class="kpi-value">--</span><span class="metric-unit"> MAD</span></div>
+        <div class="kpi-actions"><button class="miniAction" title="Remettre les totaux a zero" onclick="cmd('reset_energy_totals')">RAZ</button></div>
       </div>
-      <div class="kpi">
-        <div class="kpi-label">Score instantané</div>
-        <div><span id="scoreValue" class="kpi-value">--</span><span class="metric-unit"> /100</span></div>
-        <div class="kpi-note">Basé sur la mesure actuelle</div>
+      <div class="kpi captureKpi">
+        <div class="kpi-label">Données captées maintenant</div>
+        <div class="captureGrid">
+          <div class="captureItem"><span>Présence</span><strong id="iotPresenceNow">--</strong></div>
+          <div class="captureItem"><span>Fenêtre</span><strong id="iotWindowNow">--</strong></div>
+          <div class="captureItem"><span>Humidité</span><strong id="iotHumidityNow">--</strong></div>
+        </div>
       </div>
       <div class="kpi">
         <div class="kpi-label">Fiabilité des mesures</div>
@@ -244,9 +320,8 @@
           <div class="panel">
             <div class="sectionTitle">État équipements</div>
             <div class="state"><span class="item"><span id="lampLed" class="led led-off"></span><span id="lampText">Lampe: --</span></span><span class="item"><span id="fanLed" class="led led-off"></span><span id="fanText">Ventilateur: --</span></span></div>
-            <div class="state"><span id="modeText">Mode: --</span><span id="thermalStateText">État thermique: --</span></div>
-            <div class="state"><span id="recommendedActionText">Action recommandée: --</span><span id="autoCommandText">Commande auto: --</span></div>
-            <div class="state"><span>Alertes: <strong id="alertsValue">--</strong></span><span id="timestampText">Dernière donnée: --</span></div>
+<div class="state"><span id="autoCommandText">Commande auto: --</span></div>
+<div class="state"><span>Alertes: <strong id="alertsValue">--</strong></span><span id="timestampText">Dernière donnée: --</span></div>
             <div id="currentAnomalies" class="anomNow"></div>
           </div>
         </article>
@@ -270,9 +345,6 @@
             </div>
             <button onclick="applyComfortProfile()">APPLIQUER</button>
             <div class="summaryList">
-              <div>Température actuelle : <strong id="comfortCurrentTemp">--</strong></div>
-              <div>État : <strong id="comfortCurrentState">--</strong></div>
-              <div>Action recommandée : <strong id="comfortCurrentAction">--</strong></div>
               <div>Alerte critique : <strong id="comfortCriticalStatus">--</strong></div>
             </div>
           </div>
@@ -310,13 +382,6 @@
             </div>
           </div>
           <div class="panel">
-            <div class="sectionTitle">Données captées maintenant</div>
-            <div class="captureGrid">
-              <div class="captureItem"><span>Présence</span><strong id="iotPresenceNow">--</strong></div>
-              <div class="captureItem"><span>Fenêtre</span><strong id="iotWindowNow">--</strong></div>
-            </div>
-          </div>
-          <div class="panel">
             <div class="sectionTitle">Commandes matérielles</div>
             <div class="btns">
               <button class="success" onclick="cmd('lamp_on')">LAMP ON</button>
@@ -324,12 +389,14 @@
               <button class="success" onclick="cmd('fan_on')">FAN ON</button>
               <button class="warning" onclick="cmd('fan_off')">FAN OFF</button>
               <button onclick="cmd('fan_auto')">FAN AUTO</button>
+              <button class="success" onclick="cmd('window_open')">FENÊTRE OUVERTE</button>
+              <button class="warning" onclick="cmd('window_close')">FENÊTRE FERMÉE</button>
               <button class="danger" onclick="cmd('reboot')">REBOOT ESP32</button>
             </div>
           </div>
           <div class="panel">
             <div class="sectionTitle">Paramètres acquisition</div>
-            <div class="row"><input id="period" value="2000" inputmode="numeric"><button onclick="setPeriod()">APPLIQUER PÉRIODE</button></div>
+<div class="row"><input id="period" value="1500" inputmode="numeric"><button onclick="setPeriod()">APPLIQUER PÉRIODE</button></div>
             <div class="row"><input id="newPrice" value="1.20" inputmode="decimal"><button onclick="setPrice()">CHANGER PRIX</button></div>
           </div>
           <div id="cmdStatus" class="status">Prêt</div>
@@ -339,13 +406,13 @@
       <section class="column centerRail" aria-label="Analyse et graphiques">
         <section class="chartCard primaryChart"><h3>PUISSANCE & TEMPÉRATURE - HISTORIQUE</h3><canvas id="chart"></canvas></section>
 
-        <article class="card">
-          <h3>INTERPRÉTATION INTELLIGENTE</h3>
+        <article id="insightCard" class="card insightCard insightCard-watch">
+          <h3 class="insightHeading"><span>INTERPRÉTATION INTELLIGENTE</span><span id="insightBadge" class="statusPill status-watch">ATTENTION</span></h3>
           <div class="panel insightGrid">
             <div class="insightRow"><span>Situation actuelle</span><strong id="insightSituation">En attente de données temps réel.</strong></div>
             <div class="insightRow"><span>Cause probable</span><strong id="insightCause">Le système attend les prochaines mesures pour qualifier l'état énergétique.</strong></div>
             <div class="insightRow"><span>Impact énergétique</span><strong id="insightImpact">Aucune estimation disponible tant qu'une télémétrie récente n'est pas reçue.</strong></div>
-            <div class="insightRow"><span>Recommandation</span><strong id="insightRecommendation">Maintenir la collecte, puis actualiser l'audit avant/après.</strong></div>
+            <div id="insightRecommendationRow" class="insightRow insightRecommendationRow"><span>Recommandation</span><strong id="insightRecommendation">Maintenir la collecte, puis actualiser l'audit avant/après.</strong></div>
           </div>
         </article>
 
@@ -408,7 +475,6 @@
             <div class="scoreHero">
               <div>
                 <div class="sectionTitle">Audit énergétique avant/après</div>
-                <div class="note note-left">Mode audit énergétique actif - une seule chaîne officielle basée sur les routes /api/study/*.</div>
               </div>
               <span id="studyPhaseStatus" class="statusPill status-neutral">IDLE</span>
             </div>
@@ -436,15 +502,15 @@
               <div class="compareTrack"><div id="studyAfterBar" class="compareFill compareAfter" style="width:6px"></div></div>
             </div>
           </div>
-          <div id="studySavingsMad" class="save neutral">0.0000 MAD</div>
-          <div id="studyVisualGain" class="note">Gain : 0.000000 kWh | Réduction : 0.00 %</div>
+          <div class="studyHighlights">
+            <div id="studySavingsMad" class="save neutral">0.0000 MAD</div>
+            <div id="studyVisualGain" class="note">Gain : 0.000000 kWh | Réduction : 0.00 %</div>
+          </div>
           <div class="summaryList">
-            <div>Réduction : <strong><span id="studySavingsPercent">0.00</span>%</strong></div>
-            <div>Économie coût : <strong id="studyCostSavingValue">0.0000 MAD</strong></div>
             <div>Durée AVANT : <strong id="studyDurationBefore">0</strong> s</div>
             <div>Durée APRÈS : <strong id="studyDurationAfter">0</strong> s</div>
           </div>
-          <div class="btns"><button onclick="loadDailyReports()">RAPPORTS QUOTIDIENS</button><button onclick="requestDailyReportNow()">DAILY REPORT NOW</button></div>
+          <div class="btns"><button onclick="loadDailyReports()">RAPPORTS QUOTIDIENS</button></div>
           <div id="dailyReportsContainer" class="list"><div id="dailyReportsList"></div></div>
         </article>
 
@@ -485,11 +551,15 @@
     const API_TOKEN = "esp32_maison_2024";
     const DEVICE_ID = "esp32-1";
     const DASH_REFRESH_MS = 1000;
+    const PREDICTION_REFRESH_TICKS = 6;
+    const HISTORY_REFRESH_TICKS = 15;
     let chart = null, dailyScoresChart = null, lastData = null, selectedDays = 7, dashboardTick = 0;
     let latestPredictionData = null, latestAnomalySummary = null;
     let historyHealth = { count: 0, stable: false, avgGapSeconds: null };
-    let updateInFlight = false, connectionStable = true;
+    let updateInFlight = false, predictionInFlight = false, connectionStable = true;
     const lastCommandAt = {};
+    let commandPopupTimer = null;
+    let commandAudioContext = null;
 
     function isCommandRateLimited(command, cooldownMs = 700) { const now = Date.now(), last = lastCommandAt[command] || 0; if (now - last < cooldownMs) return true; lastCommandAt[command] = now; return false; }
     const toBool = (v) => v === true || v === 1 || v === "1" || v === "true";
@@ -508,6 +578,115 @@
       { key: "overpower", label: "Surconsommation active", className: "over" },
       { key: "temp", label: "Température critique", className: "temp" }
     ];
+
+    function formatCommandLabel(command) {
+      const labels = {
+        lamp_on: "Lampe ON",
+        lamp_off: "Lampe OFF",
+        fan_on: "Ventilateur ON",
+        fan_off: "Ventilateur OFF",
+        fan_auto: "Ventilateur AUTO",
+        window_open: "Fenêtre ouverte",
+        window_close: "Fenêtre fermée",
+        reboot: "Redémarrage ESP32",
+        reset_energy_totals: "RAZ énergie",
+        reset_study: "Réinitialiser audit",
+        set_period: "Période d'acquisition",
+        set_price: "Prix énergie",
+        study_start_before: "Démarrer AVANT",
+        study_start_after: "Démarrer APRÈS",
+        study_stop: "Arrêter étude",
+        study_report: "Rapport étude",
+        daily_report_now: "Rapport quotidien",
+        financial_audit: "Audit financier"
+      };
+      return labels[command] || String(command || "").replace(/_/g, " ").toUpperCase();
+    }
+
+    function normalizeButtonLabel(text) {
+      return String(text || "").replace(/\s+/g, " ").trim();
+    }
+
+    function getButtonFeedbackLabel(button) {
+      if (!button) return "";
+      const onclick = String(button.getAttribute("onclick") || "");
+      const cmdMatch = onclick.match(/cmd\('([^']+)'\)/);
+      if (cmdMatch) return formatCommandLabel(cmdMatch[1]);
+      return normalizeButtonLabel(button.textContent) || "Action";
+    }
+
+    function playCommandSound(kind = "success") {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!commandAudioContext) commandAudioContext = new AudioCtx();
+      const ctx = commandAudioContext;
+      if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+      const now = ctx.currentTime + 0.02;
+      const gain = ctx.createGain();
+      const baseVolume = kind === "error" ? 0.52 : kind === "sending" ? 0.35 : 0.42;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(baseVolume, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.52);
+      gain.connect(ctx.destination);
+
+      const tones = kind === "error" ? [196, 164] : kind === "sending" ? [784, 988] : [659, 988];
+      tones.forEach((frequency, index) => {
+        const oscillator = ctx.createOscillator();
+        oscillator.type = kind === "error" ? "sawtooth" : "triangle";
+        oscillator.frequency.setValueAtTime(frequency, now + index * 0.11);
+        oscillator.connect(gain);
+        oscillator.start(now + index * 0.11);
+        oscillator.stop(now + index * 0.11 + 0.18);
+      });
+    }
+
+    function hideCommandPopup() {
+      const popup = document.getElementById("commandPopup");
+      if (!popup) return;
+      popup.className = "commandPopup";
+      popup.setAttribute("aria-hidden", "true");
+      commandPopupTimer = null;
+    }
+
+    function showCommandPopup(label, state, hint) {
+      const popup = document.getElementById("commandPopup");
+      const title = document.getElementById("commandPopupTitle");
+      const icon = document.getElementById("commandPopupIcon");
+      const message = document.getElementById("commandPopupMessage");
+      const hintNode = document.getElementById("commandPopupHint");
+      if (!popup || !title || !icon || !message || !hintNode) return;
+
+      const normalizedState = state === "success" ? "success" : state === "error" ? "error" : "sending";
+      const titles = {
+        sending: "Action déclenchée",
+        success: "Action validée",
+        error: "Action refusée"
+      };
+      const icons = {
+        sending: "GO",
+        success: "OK",
+        error: "KO"
+      };
+
+      popup.className = `commandPopup show commandPopup-${normalizedState}`;
+      popup.setAttribute("aria-hidden", "false");
+      title.textContent = titles[normalizedState];
+      icon.textContent = icons[normalizedState];
+      message.textContent = String(label || "Action");
+      hintNode.textContent = hint || (normalizedState === "sending" ? "Appui détecté, action en cours..." : "");
+      playCommandSound(normalizedState);
+
+      if (commandPopupTimer) clearTimeout(commandPopupTimer);
+      commandPopupTimer = setTimeout(hideCommandPopup, normalizedState === "sending" ? 1100 : 1700);
+    }
+
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest("button");
+      if (!button || button.disabled || !button.hasAttribute("onclick")) return;
+      const label = getButtonFeedbackLabel(button);
+      showCommandPopup(label, "sending");
+    }, true);
 
     function parseAnomalyPayload(payload) {
       if (Array.isArray(payload)) return payload.map((item) => String(item || "").trim()).filter(Boolean);
@@ -652,13 +831,11 @@
       else node.classList.add("neutral");
     }
 
-    function updateSavingsVisual(mad, percent) {
-      const m = Number(mad || 0), p = Number(percent || 0);
-      const madEl = document.getElementById("studySavingsMad"), pctEl = document.getElementById("studySavingsPercent");
+    function updateSavingsVisual(mad) {
+      const m = Number(mad || 0);
+      const madEl = document.getElementById("studySavingsMad");
       madEl.textContent = `${m >= 0 ? "+" : ""}${m.toFixed(4)} MAD`;
-      pctEl.textContent = p.toFixed(2);
-      document.getElementById("studyCostSavingValue").textContent = `${m.toFixed(4)} MAD`;
-      applySavingsColor(m, madEl); applySavingsColor(m, pctEl);
+      applySavingsColor(m, madEl);
     }
 
     function updateFinancePrice(price) {
@@ -690,7 +867,7 @@
       const afterWidth = afterKwh > 0 ? Math.max(8, (afterKwh / maxKwh) * 100) : 0;
       document.getElementById("studyBeforeBar").style.width = `${beforeWidth}%`;
       document.getElementById("studyAfterBar").style.width = `${afterWidth}%`;
-      updateSavingsVisual(costSaving, reduction);
+      updateSavingsVisual(costSaving);
     }
 
     function formatRiskLevel(level) {
@@ -712,9 +889,15 @@
     }
 
     function updateComfortSummary(d) {
-      document.getElementById("comfortCurrentTemp").textContent = `${Number(d.temp_c || 0).toFixed(1)} C`;
-      document.getElementById("comfortCurrentState").textContent = formatThermalState(d.thermal_state);
-      document.getElementById("comfortCurrentAction").textContent = formatAction(d.recommended_action);
+      const stateLabel = formatThermalState(d.thermal_state);
+      const stateEl = document.getElementById("comfortCurrentStateKpi");
+      if (stateEl) {
+        stateEl.textContent = `État : ${stateLabel}`;
+        stateEl.classList.remove("thermalState-ok", "thermalState-watch", "thermalState-critical");
+        stateEl.classList.add(
+          stateLabel === "Confort" ? "thermalState-ok" : stateLabel === "Trop chaud" || stateLabel === "Trop froid" ? "thermalState-critical" : "thermalState-watch"
+        );
+      }
       document.getElementById("comfortCriticalStatus").textContent = toBool(d.critical_temp_alert) ? "Oui" : "Non";
     }
 
@@ -778,6 +961,7 @@
 
       setNodeText("iotPresenceNow", typeof d.presence === "undefined" ? "--" : (toBool(d.presence) ? "Détectée" : "Absente"));
       setNodeText("iotWindowNow", typeof d.window_open === "undefined" ? "--" : (toBool(d.window_open) ? "Ouverte" : "Fermée"));
+      setNodeText("iotHumidityNow", typeof d.humidity === "undefined" || d.humidity === null ? "--" : `${Number(d.humidity || 0).toFixed(0)} %`);
     }
 
     function renderLatestUI(d) {
@@ -785,16 +969,12 @@
       document.getElementById("powerValue").textContent = Number(d.power_w || 0).toFixed(0);
       document.getElementById("energyValue").textContent = Number(d.energy_total_kwh || 0).toFixed(4);
       document.getElementById("costValue").textContent = Number(d.cost_mad || 0).toFixed(2);
-      document.getElementById("scoreValue").textContent = Number(d.comfort_score || 0).toFixed(0);
       document.getElementById("alertsValue").textContent = Number(d.alerts || 0).toFixed(0);
       const lampOn = toBool(d.lamp_on), fanOn = toBool(d.fan_on);
       document.getElementById("lampLed").className = `led ${lampOn ? "led-on" : "led-off"}`;
       document.getElementById("lampText").textContent = `Lampe: ${lampOn ? "ON" : "OFF"}`;
       document.getElementById("fanLed").className = `led ${fanOn ? "led-on" : "led-off"}`;
       document.getElementById("fanText").textContent = `Ventilateur: ${fanOn ? "ON" : "OFF"}`;
-      document.getElementById("modeText").textContent = `Mode: ${d.mode || "N/A"}`;
-      document.getElementById("thermalStateText").textContent = `Etat thermique: ${formatThermalState(d.thermal_state)}`;
-      document.getElementById("recommendedActionText").textContent = `Action recommandee: ${formatAction(d.recommended_action)}`;
       document.getElementById("autoCommandText").textContent = `Commande auto: ${d.auto_command ? formatAction(d.auto_command) : "Aucune"}`;
       const arr = getCurrentAnomalyLabels(d);
       const box = document.getElementById("currentAnomalies");
@@ -885,6 +1065,8 @@
     function buildInterpretation(d = {}, prediction = latestPredictionData) {
       if (!d || !Object.keys(d).length) {
         return {
+          tone: "watch",
+          badge: "EN ATTENTE",
           situation: "En attente de données temps réel.",
           cause: "Le système attend les prochaines mesures pour qualifier l'état énergétique.",
           impact: "Aucune estimation disponible tant qu'une télémétrie récente n'est pas reçue.",
@@ -901,6 +1083,8 @@
 
       if (toBool(d.critical_temp_alert)) {
         return {
+          tone: "critical",
+          badge: "ALERTE",
           situation: "Température critique détectée.",
           cause: "Le seuil thermique critique est dépassé.",
           impact: "Le confort est dégradé et la consommation peut augmenter rapidement si la situation dure.",
@@ -927,6 +1111,8 @@
         }
 
         return {
+          tone: "watch",
+          badge: "ATTENTION",
           situation: primary.title,
           cause,
           impact: `${primary.detail} Risque actuel ${riskLabel}, puissance mesurée ${power.toFixed(0)} W.`,
@@ -936,6 +1122,8 @@
 
       if (d.thermal_state === "trop_chaud") {
         return {
+          tone: "critical",
+          badge: "TROP CHAUD",
           situation: "Température trop élevée.",
           cause: "La zone de confort thermique est dépassée.",
           impact: "Une ventilation adaptée est nécessaire pour éviter l'inconfort et stabiliser la dépense énergétique.",
@@ -945,6 +1133,8 @@
 
       if (d.thermal_state === "trop_froid") {
         return {
+          tone: "watch",
+          badge: "TROP FROID",
           situation: "Température trop basse.",
           cause: "La zone thermique est en dessous du niveau de confort visé.",
           impact: "Le confort est dégradé et une action corrective peut être nécessaire selon l'usage de la zone.",
@@ -953,6 +1143,8 @@
       }
 
       return {
+        tone: "correct",
+        badge: "STABLE",
         situation: "Fonctionnement globalement stable.",
         cause: `Etat thermique ${formatThermalState(d.thermal_state)} avec ${presenceText}.`,
         impact: `Puissance instantanée ${power.toFixed(0)} W, niveau de risque ${riskLabel} et aucune anomalie majeure immédiate.`,
@@ -962,6 +1154,24 @@
 
     function renderInterpretation() {
       const interpretation = buildInterpretation(lastData || {}, latestPredictionData);
+      const card = document.getElementById("insightCard");
+      const badge = document.getElementById("insightBadge");
+      const recRow = document.getElementById("insightRecommendationRow");
+      const tone = interpretation.tone || "watch";
+      const badgeText = interpretation.badge || (tone === "critical" ? "ALERTE" : tone === "ok" ? "RAS" : "ATTENTION");
+
+      if (card) {
+        card.classList.remove("insightCard-watch", "insightCard-critical", "insightCard-correct", "insightCard-ok");
+        card.classList.add(`insightCard-${tone}`);
+      }
+      if (badge) {
+        badge.textContent = badgeText;
+        badge.className = `statusPill insightBadge status-${tone === "ok" ? "excellent" : tone}`;
+      }
+      if (recRow) {
+        recRow.classList.remove("insightRecommendationRow-watch", "insightRecommendationRow-critical");
+        recRow.classList.add(tone === "critical" ? "insightRecommendationRow-critical" : "insightRecommendationRow-watch");
+      }
       document.getElementById("insightSituation").textContent = interpretation.situation;
       document.getElementById("insightCause").textContent = interpretation.cause;
       document.getElementById("insightImpact").textContent = interpretation.impact;
@@ -1071,7 +1281,7 @@
 
       const currentPower = Number(lastData.power_w || 0).toFixed(0);
       const currentScore = Number(lastData.comfort_score || 0).toFixed(0);
-      document.getElementById("financeSituation").textContent = `Puissance actuelle ${currentPower} W, score instantané ${currentScore}/100.`;
+      document.getElementById("financeSituation").textContent = `Puissance actuelle ${currentPower} W, niveau actuel ${currentScore}/100.`;
 
       if (latestPredictionData && typeof latestPredictionData.predicted_kwh_24h !== "undefined") {
         const predictedEnergy24 = Number(latestPredictionData.predicted_kwh_24h || 0);
@@ -1093,6 +1303,60 @@
       renderWastePanel();
       renderGlobalScore();
       renderFinanceProjection();
+    }
+
+    function renderRealtimePanels() {
+      if (!lastData) return;
+      renderLatestUI(lastData);
+      updateFinanceFromTelemetry(lastData);
+    }
+
+    function renderAnalysisPanels() {
+      renderPredictionUI();
+      refreshInsightPanels();
+    }
+
+    async function refreshPredictionData(force = false) {
+      const shouldRefresh = force || !latestPredictionData || dashboardTick % PREDICTION_REFRESH_TICKS === 0;
+      if (!shouldRefresh || predictionInFlight) return false;
+
+      predictionInFlight = true;
+      try {
+        const ok = await fetchPrediction();
+        if (ok) renderAnalysisPanels();
+        return ok;
+      } finally {
+        predictionInFlight = false;
+      }
+    }
+
+    async function refreshDashboard() {
+      if (updateInFlight) return;
+      updateInFlight = true;
+      updateClock();
+
+      try {
+        const latestOk = await fetchLatest();
+        if (latestOk) {
+          renderRealtimePanels();
+          setConnectionBadge(true);
+        } else {
+          setConnectionBadge(Boolean(lastData));
+          if (!lastData) setLiveBadge(false, 9999);
+        }
+
+        if (dashboardTick % HISTORY_REFRESH_TICKS === 0) await fetchHistory();
+
+        renderAnalysisPanels();
+        void refreshPredictionData();
+
+        if (!latestOk && !lastData) {
+          document.getElementById("iaInfo").textContent = "Collecte de donnees pour prevision...";
+        }
+      } finally {
+        dashboardTick += 1;
+        updateInFlight = false;
+      }
     }
 
     function ensureRealtimeChart() {
@@ -1258,6 +1522,9 @@
     }
 
     async function updateDashboard() {
+      return refreshDashboard();
+    }
+    /*
       if (updateInFlight) return;
       updateInFlight = true;
       updateClock();
@@ -1280,17 +1547,26 @@
         updateInFlight = false;
       }
     }
+    */
 
     async function cmd(command) {
       if (isCommandRateLimited(command)) return;
-      setCommandStatus(`Envoi ${command}...`);
+      const label = formatCommandLabel(command);
+      setCommandStatus(`Envoi ${label}...`);
       const r = await fetchJSON("/api/cmd", { method: "POST", body: { device_id: DEVICE_ID, command, payload: {} } });
-      if (r.status === 200 && r.data && r.data.ok) { setCommandStatus(`OK ${command}`); showToast(`OK ${command}`); }
-      else { const msg = r.data && r.data.error ? r.data.error : r.status; setCommandStatus(`ECHEC ${command}: ${msg}`, true); showToast(`Echec ${command}`, "error"); }
+      if (r.status === 200 && r.data && r.data.ok) {
+        setCommandStatus(`OK ${label}`);
+        showToast(`OK ${label}`);
+        if (command === "reset_energy_totals") {
+          await fetchLatest();
+          updateUI();
+        }
+      }
+      else { const msg = r.data && r.data.error ? r.data.error : r.status; setCommandStatus(`ECHEC ${label}: ${msg}`, true); showToast(`Echec ${label}`, "error"); }
     }
 
     async function setPeriod() {
-      const p = parseInt(document.getElementById("period").value, 10) || 2000;
+      const p = parseInt(document.getElementById("period").value, 10) || 1500;
       if (p < 1000 || p > 30000) { showToast("Periode invalide (1000..30000)", "error"); return; }
       if (isCommandRateLimited("set_period")) return;
       setCommandStatus(`set_period ${p}...`);
@@ -1383,14 +1659,6 @@
         } else if (j && !j.ok) list.innerHTML = `<div style="color:#ffbcc0;">Erreur: ${j.error || "serveur"}</div>`;
         else list.innerHTML = "<div style='color:#9ec2e3;'>Aucun rapport quotidien.</div>";
       } catch (e) { list.innerHTML = "<div style='color:#ffbcc0;'>Erreur chargement rapports.</div>"; console.error("loadDailyReports", e); }
-    }
-
-    async function requestDailyReportNow() {
-      if (isCommandRateLimited("daily_report_now", 800)) return;
-      setCommandStatus("Demande daily_report_now...");
-      const r = await fetchJSON("/api/cmd", { method: "POST", body: { device_id: DEVICE_ID, command: "daily_report_now", payload: {} } });
-      if (r.status === 200 && r.data && r.data.ok) { setCommandStatus("OK daily_report_now"); showToast("Daily report now envoye"); setTimeout(loadDailyReports, 3500); }
-      else { const msg = r.data && r.data.error ? r.data.error : r.status; setCommandStatus(`ECHEC daily_report_now: ${msg}`, true); }
     }
 
     async function predict() {
